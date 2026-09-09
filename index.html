@@ -2,178 +2,513 @@
   <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>Admin Panel - Upload Movie</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Moviepro 2.0 Admin Panel</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="sidebar">
-      <h2>Admin Panel</h2>
-      <nav>
-        <ul>
-          <li><a href="#" data-target="uploadMovieSection" class="active">Upload Movie or Series</a></li>
-          <li><a href="#" data-target="uploadEpisodeSection">Upload Episode</a></li>
-          <li><a href="#" data-target="addVideoSourceSection">Add Video Source</a></li>
-          <li><a href="#" data-target="analyticsSection">Analytics</a></li>
-        </ul>
-      </nav>
+    <div id="authScreen" class="auth-screen">
+      <div class="auth-card">
+        <div class="brand-block">
+          <div class="brand-mark">MP</div>
+          <div>
+            <p class="eyebrow">Admin access</p>
+            <h1>Moviepro 2.0</h1>
+          </div>
+        </div>
+
+        <form id="loginForm" class="auth-form">
+          <div class="field-group">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" placeholder="admin@example.com" autocomplete="username" required />
+          </div>
+
+          <div class="field-group">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" placeholder="Enter your password" autocomplete="current-password" required />
+          </div>
+
+          <button type="submit" id="loginButton" class="primary-btn">Login</button>
+          <p id="loginMessage" class="form-message" aria-live="polite"></p>
+        </form>
+      </div>
     </div>
 
-    <div class="main-content">
-      <section id="uploadMovieSection">
-        <h2>Upload Movie or Series</h2>
-        <form id="movie-form" enctype="multipart/form-data">
-          <label for="title">Title:</label>
-          <input type="text" id="title" name="title" required /><br>
-
-          <label for="overview">Overview:</label>
-          <input type="text" id="overview" name="overview" required /><br>
-
-          <label for="category">Category:</label>
-          <select id="category" name="category" required>
-            <option value="" disabled selected>Select category</option>
-            <option value="Action">Action</option>
-            <option value="Comedy">Comedy</option>
-            <option value="Drama">Drama</option>
-            <option value="Horror">Horror</option>
-            <option value="Sci-Fi">Sci-Fi</option>
-          </select><br>
-
-          <label for="region">Region:</label>
-          <select id="region" name="region" required>
-            <option value="Hollywood">Hollywood</option>
-            <option value="Bollywood">Bollywood</option>
-            <option value="All">All</option>
-          </select><br>
-
-          <label for="posterUrl">Poster Image (URL):</label>
-          <input type="text" id="posterUrl" name="posterUrl" placeholder="Enter image URL" required /><br>
-
-          <label>Video Sources:</label>
-          <div id="videoSources">
-            <div class="video-source">
-              <input type="text" placeholder="Quality (e.g., 1080p)" class="quality" required />
-              <input type="text" placeholder="Language (e.g., Hindi)" class="language" required />
-              <input type="text" placeholder="Video URL" class="url" required />
-            </div>
-          </div>
-          <button type="button" onclick="addVideoSource()">Add Another Source</button><br>
-
-          <label for="releaseDate">Release Date:</label>
-          <input type="date" id="releaseDate" name="releaseDate" required /><br>
-
-          <label for="voteAverage">Vote Average:</label>
-          <input type="number" step="0.1" id="voteAverage" name="voteAverage" required /><br>
-
-          <label for="type">Type (Movie/Series):</label>
-          <select id="type" name="type" required>
-            <option value="Movie">Movie</option>
-            <option value="series">Series</option>
-          </select><br><br>
-
-          <button type="submit">Upload</button>
-        </form>
-
-        <div id="uploadProgress">
-          <div id="uploadProgressBar"></div>
-        </div>
-
-        <div id="movieDetails"></div>
-      </section>
-
-      <section id="uploadEpisodeSection" style="display:none;">
-        <h2>Upload Episode (for Series)</h2>
-        <form id="episode-form">
-          <label for="seriesId">Series ID:</label>
-          <input type="text" id="seriesId" name="seriesId" required /><br>
-
-          <label for="episodeTitle">Episode Title:</label>
-          <input type="text" id="episodeTitle" name="episodeTitle" required /><br>
-
-          <label for="episodeOverview">Overview:</label>
-          <input type="text" id="episodeOverview" name="episodeOverview" required /><br>
-
-          <label>Video Sources:</label>
-          <div id="episodeVideoSources">
-            <div class="episode-video-source">
-              <input type="text" placeholder="Video URL" class="url" required />
-              <input type="text" placeholder="Language" class="language" required />
-              <input type="text" placeholder="Quality" class="quality" required />
-              <button type="button" onclick="removeEpisodeVideoSource(this)">Remove</button>
-              <br/>
-            </div>
-          </div>
-          <button type="button" onclick="addEpisodeVideoSource()">Add Another Source</button><br>
-
-          <label for="episodeNumber">Episode Number:</label>
-          <input type="number" id="episodeNumber" name="episodeNumber" required /><br><br>
-
-          <button type="submit">Upload Episode</button>
-        </form>
-
-        <div id="episodeStatus" style="margin-top: 10px;"></div>
-      </section>
-
-      <section id="addVideoSourceSection" style="display:none;">
-        <h2>Add Video Source</h2>
-        <form id="videoSourceForm">
-          <label for="existingTitle">Select Movie:</label>
-          <select id="existingTitle" name="existingTitle" required>
-            <option value="">-- Select Movie --</option>
-          </select>
-
-          <label for="newQuality">Quality:</label>
-          <input type="text" id="newQuality" name="newQuality" placeholder="e.g. 720p" required />
-
-          <label for="newLanguage">Language:</label>
-          <input type="text" id="newLanguage" name="newLanguage" placeholder="e.g. Hindi" required />
-
-          <label for="newUrl">Video URL:</label>
-          <input type="url" id="newUrl" name="newUrl" placeholder="https://example.com/video.mp4" required />
-
-          <button type="submit">Add Video Source</button>
-        </form>
-      </section>
-
-      <!-- ✅ New Analytics Section -->
-      <section id="analyticsSection" style="display:none;">
-        <h2>Analytics</h2>
-
-        <div class="analytics-cards">
-          <div class="card">
-            <h3>Total Installs</h3>
-            <p id="totalInstalls">-</p>
-          </div>
-          <div class="card">
-            <h3>Total Visits</h3>
-            <p id="totalVisits">-</p>
-          </div>
-          <div class="card">
-            <h3>Today Visits</h3>
-            <p id="todayVisits">-</p>
-          </div>
-          <div class="card">
-            <h3>Total Movie Plays</h3>
-            <p id="totalMoviePlays">-</p>
+    <div id="appShell" class="app-shell hidden">
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <div>
+            <p class="eyebrow">Control room</p>
+            <h2>Admin Panel</h2>
           </div>
         </div>
 
-        <h3 style="margin-top:30px;">Crash Reports</h3>
-        <table id="crashReportsTable">
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Message</th>
-              <th>Platform</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </section>
+        <nav class="nav">
+          <button class="nav-item active" data-section="dashboardSection">Dashboard</button>
+          <button class="nav-item" data-section="moviesSection">Movies</button>
+          <button class="nav-item" data-section="seriesSection">Series</button>
+          <button class="nav-item" data-section="episodesSection">Episodes</button>
+          <button class="nav-item" data-section="uploadsSection">Uploads</button>
+          <button class="nav-item" data-section="analyticsSection">Analytics</button>
+          <button class="nav-item" data-section="crashSection">Crash Reports</button>
+          <button class="nav-item" data-section="settingsSection">Settings</button>
+          <button id="logoutButton" class="nav-item danger" type="button">Logout</button>
+        </nav>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Logged in as</p>
+            <h3 id="currentUserLabel">Administrator</h3>
+          </div>
+          <button id="refreshAllButton" class="secondary-btn" type="button">Refresh Data</button>
+        </header>
+
+        <div id="toast" class="toast" aria-live="polite"></div>
+
+        <section id="dashboardSection" class="panel active-panel">
+          <div class="section-header">
+            <h2>Dashboard</h2>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card">
+              <span>Total Movies</span>
+              <strong id="dashboardTotalMovies">0</strong>
+            </div>
+            <div class="stat-card">
+              <span>Total Series</span>
+              <strong id="dashboardTotalSeries">0</strong>
+            </div>
+            <div class="stat-card">
+              <span>Total Episodes</span>
+              <strong id="dashboardTotalEpisodes">0</strong>
+            </div>
+            <div class="stat-card accent">
+              <span>Today Visits</span>
+              <strong id="dashboardTodayVisits">0</strong>
+            </div>
+          </div>
+
+          <div class="dashboard-grid">
+            <div class="panel-card">
+              <h3>Recent Movies</h3>
+              <ul id="recentMoviesList" class="list-stack"></ul>
+            </div>
+            <div class="panel-card">
+              <h3>Recent Series</h3>
+              <ul id="recentSeriesList" class="list-stack"></ul>
+            </div>
+          </div>
+        </section>
+
+        <section id="moviesSection" class="panel">
+          <div class="section-header">
+            <h2>Movies</h2>
+          </div>
+
+          <div class="toolbar">
+            <input id="movieSearch" type="search" placeholder="Search movies by title" />
+            <select id="movieCategoryFilter">
+              <option value="">All categories</option>
+              <option value="Action">Action</option>
+              <option value="Comedy">Comedy</option>
+              <option value="Drama">Drama</option>
+              <option value="Horror">Horror</option>
+              <option value="Sci-Fi">Sci-Fi</option>
+            </select>
+            <select id="movieRegionFilter">
+              <option value="">All regions</option>
+              <option value="Hollywood">Hollywood</option>
+              <option value="Bollywood">Bollywood</option>
+              <option value="All">All</option>
+            </select>
+          </div>
+
+          <form id="movieForm" class="content-form">
+            <input type="hidden" id="movieId" />
+
+            <div class="form-grid two-col">
+              <div class="field-group">
+                <label for="movieTitle">Title</label>
+                <input id="movieTitle" required />
+              </div>
+
+              <div class="field-group">
+                <label for="movieCategory">Category</label>
+                <select id="movieCategory" required>
+                  <option value="">Select category</option>
+                  <option value="Action">Action</option>
+                  <option value="Comedy">Comedy</option>
+                  <option value="Drama">Drama</option>
+                  <option value="Horror">Horror</option>
+                  <option value="Sci-Fi">Sci-Fi</option>
+                </select>
+              </div>
+
+              <div class="field-group">
+                <label for="movieRegion">Region</label>
+                <select id="movieRegion" required>
+                  <option value="Hollywood">Hollywood</option>
+                  <option value="Bollywood">Bollywood</option>
+                  <option value="All">All</option>
+                </select>
+              </div>
+
+              <div class="field-group">
+                <label for="movieType">Type</label>
+                <select id="movieType" required>
+                  <option value="movie">Movie</option>
+                  <option value="series">Series</option>
+                </select>
+              </div>
+
+              <div class="field-group full-width">
+                <label for="movieOverview">Overview</label>
+                <textarea id="movieOverview" rows="3" required></textarea>
+              </div>
+
+              <div class="field-group">
+                <label for="moviePosterPath">Poster Path</label>
+                <input id="moviePosterPath" type="url" placeholder="https://.../poster.jpg" />
+              </div>
+
+              <div class="field-group">
+                <label for="movieReleaseDate">Release Date</label>
+                <input id="movieReleaseDate" type="date" required />
+              </div>
+
+              <div class="field-group">
+                <label for="movieVoteAverage">Vote Average</label>
+                <input id="movieVoteAverage" type="number" min="0" max="10" step="0.1" required />
+              </div>
+            </div>
+
+            <div class="source-block">
+              <div class="subheader-row">
+                <h3>Video Sources</h3>
+                <button type="button" class="secondary-btn" id="addMovieSourceButton">Add Source</button>
+              </div>
+              <div id="movieSourceList" class="source-list"></div>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" id="movieSubmitButton" class="primary-btn">Create Movie</button>
+              <button type="button" id="resetMovieFormButton" class="ghost-btn">Reset</button>
+            </div>
+          </form>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Category</th>
+                  <th>Region</th>
+                  <th>Vote</th>
+                  <th>Sources</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="movieTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="seriesSection" class="panel">
+          <div class="section-header">
+            <h2>Series</h2>
+          </div>
+
+          <div class="toolbar">
+            <input id="seriesSearch" type="search" placeholder="Search series by title" />
+          </div>
+
+          <form id="seriesForm" class="content-form">
+            <input type="hidden" id="seriesId" />
+
+            <div class="form-grid two-col">
+              <div class="field-group">
+                <label for="seriesTitle">Title</label>
+                <input id="seriesTitle" required />
+              </div>
+
+              <div class="field-group">
+                <label for="seriesCategory">Category</label>
+                <select id="seriesCategory" required>
+                  <option value="">Select category</option>
+                  <option value="Action">Action</option>
+                  <option value="Comedy">Comedy</option>
+                  <option value="Drama">Drama</option>
+                  <option value="Horror">Horror</option>
+                  <option value="Sci-Fi">Sci-Fi</option>
+                </select>
+              </div>
+
+              <div class="field-group">
+                <label for="seriesRegion">Region</label>
+                <select id="seriesRegion" required>
+                  <option value="Hollywood">Hollywood</option>
+                  <option value="Bollywood">Bollywood</option>
+                  <option value="All">All</option>
+                </select>
+              </div>
+
+              <div class="field-group">
+                <label for="seriesType">Type</label>
+                <select id="seriesType" required>
+                  <option value="series">Series</option>
+                </select>
+              </div>
+
+              <div class="field-group full-width">
+                <label for="seriesOverview">Overview</label>
+                <textarea id="seriesOverview" rows="3" required></textarea>
+              </div>
+
+              <div class="field-group">
+                <label for="seriesPosterPath">Poster Path</label>
+                <input id="seriesPosterPath" type="url" placeholder="https://.../poster.jpg" />
+              </div>
+
+              <div class="field-group">
+                <label for="seriesReleaseDate">Release Date</label>
+                <input id="seriesReleaseDate" type="date" required />
+              </div>
+
+              <div class="field-group">
+                <label for="seriesVoteAverage">Vote Average</label>
+                <input id="seriesVoteAverage" type="number" min="0" max="10" step="0.1" required />
+              </div>
+            </div>
+
+            <div class="source-block">
+              <div class="subheader-row">
+                <h3>Video Sources</h3>
+                <button type="button" class="secondary-btn" id="addSeriesSourceButton">Add Source</button>
+              </div>
+              <div id="seriesSourceList" class="source-list"></div>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" id="seriesSubmitButton" class="primary-btn">Create Series</button>
+              <button type="button" id="resetSeriesFormButton" class="ghost-btn">Reset</button>
+            </div>
+          </form>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Category</th>
+                  <th>Region</th>
+                  <th>Vote</th>
+                  <th>Sources</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="seriesTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="episodesSection" class="panel">
+          <div class="section-header">
+            <h2>Episodes</h2>
+          </div>
+
+          <form id="episodeForm" class="content-form">
+            <div class="form-grid two-col">
+              <div class="field-group">
+                <label for="episodeSeriesSelect">Series</label>
+                <select id="episodeSeriesSelect" required>
+                  <option value="">Select series</option>
+                </select>
+              </div>
+
+              <div class="field-group">
+                <label for="episodeNumberInput">Episode Number</label>
+                <input id="episodeNumberInput" type="number" min="1" required />
+              </div>
+
+              <div class="field-group full-width">
+                <label for="episodeTitleInput">Episode Title</label>
+                <input id="episodeTitleInput" required />
+              </div>
+
+              <div class="field-group full-width">
+                <label for="episodeOverviewInput">Overview</label>
+                <textarea id="episodeOverviewInput" rows="3"></textarea>
+              </div>
+            </div>
+
+            <div class="source-block">
+              <div class="subheader-row">
+                <h3>Video Sources</h3>
+                <button type="button" class="secondary-btn" id="addEpisodeSourceButton">Add Source</button>
+              </div>
+              <div id="episodeSourceList" class="source-list"></div>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="primary-btn">Create Episode</button>
+            </div>
+          </form>
+
+          <div class="table-wrap">
+            <h3>Episodes for selected series</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Episode</th>
+                  <th>Title</th>
+                  <th>Overview</th>
+                  <th>Sources</th>
+                </tr>
+              </thead>
+              <tbody id="episodeTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="uploadsSection" class="panel">
+          <div class="section-header">
+            <h2>Uploads</h2>
+          </div>
+
+          <div class="upload-grid">
+            <div class="panel-card">
+              <h3>Poster / Image Upload</h3>
+              <form id="posterUploadForm" class="content-form compact-form">
+                <div class="field-group">
+                  <label for="posterUploadFile">Image file</label>
+                  <input id="posterUploadFile" type="file" accept="image/*" required />
+                </div>
+                <button type="submit" class="primary-btn">Upload Poster</button>
+              </form>
+            </div>
+
+            <div class="panel-card">
+              <h3>Video Upload to Wasabi</h3>
+              <form id="videoUploadForm" class="content-form compact-form">
+                <div class="field-group">
+                  <label for="videoTargetType">Target</label>
+                  <select id="videoTargetType">
+                    <option value="movie">Movie</option>
+                    <option value="series">Series</option>
+                  </select>
+                </div>
+
+                <div class="field-group">
+                  <label for="videoTargetSelect">Select item</label>
+                  <select id="videoTargetSelect" required></select>
+                </div>
+
+                <div class="field-group">
+                  <label for="videoUploadFile">Video file</label>
+                  <input id="videoUploadFile" type="file" accept="video/*" required />
+                </div>
+
+                <div class="field-group">
+                  <label for="uploadQuality">Quality</label>
+                  <select id="uploadQuality">
+                    <option value="1080p">1080p</option>
+                    <option value="720p">720p</option>
+                    <option value="480p">480p</option>
+                    <option value="360p">360p</option>
+                  </select>
+                </div>
+
+                <div class="field-group">
+                  <label for="uploadLanguage">Language</label>
+                  <select id="uploadLanguage">
+                    <option value="Hindi">Hindi</option>
+                    <option value="English">English</option>
+                    <option value="Tamil">Tamil</option>
+                    <option value="Telegu">Telegu</option>
+                    <option value="Malayalam">Malayalam</option>
+                  </select>
+                </div>
+
+                <div id="uploadProgressWrapper" class="upload-progress hidden">
+                  <div class="progress-meta">
+                    <span id="uploadProgressLabel">Ready</span>
+                    <span id="uploadProgressPct">0%</span>
+                  </div>
+                  <div class="progress-bar">
+                    <div id="uploadProgressBar"></div>
+                  </div>
+                </div>
+
+                <button type="submit" id="videoUploadButton" class="primary-btn">Upload to Wasabi</button>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <section id="analyticsSection" class="panel">
+          <div class="section-header">
+            <h2>Analytics</h2>
+            <button id="refreshAnalyticsButton" class="secondary-btn" type="button">Refresh</button>
+          </div>
+
+          <div class="analytics-cards">
+            <div class="card">
+              <p>Total Installs</p>
+              <strong id="totalInstalls">0</strong>
+            </div>
+            <div class="card">
+              <p>Total Visits</p>
+              <strong id="totalVisits">0</strong>
+            </div>
+            <div class="card">
+              <p>Today Visits</p>
+              <strong id="todayVisits">0</strong>
+            </div>
+            <div class="card">
+              <p>Total Movie Plays</p>
+              <strong id="totalMoviePlays">0</strong>
+            </div>
+          </div>
+        </section>
+
+        <section id="crashSection" class="panel">
+          <div class="section-header">
+            <h2>Crash Reports</h2>
+            <button id="refreshCrashButton" class="secondary-btn" type="button">Refresh</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Message</th>
+                  <th>Platform</th>
+                  <th>App Version</th>
+                </tr>
+              </thead>
+              <tbody id="crashTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="settingsSection" class="panel">
+          <div class="section-header">
+            <h2>Settings</h2>
+          </div>
+
+          <div class="panel-card settings-card">
+            <h3>Session</h3>
+            <p><strong>Role:</strong> <span id="settingsRole">admin</span></p>
+            <p><strong>Auth:</strong> JWT access token stored in session storage for this admin session.</p>
+            <p><strong>Storage:</strong> No secrets or credentials are stored in the source code.</p>
+          </div>
+        </section>
+      </main>
     </div>
 
     <script src="script.js"></script>
   </body>
-  </html>
-
 
