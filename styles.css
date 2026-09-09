@@ -186,6 +186,37 @@ textarea {
   color: var(--success);
 }
 
+.helper-copy {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.checkbox-inline input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+
+.storage-help-card {
+  background: linear-gradient(135deg, #eff6ff, #f8fafc);
+}
+
 .app-shell {
   display: flex;
   min-height: 100vh;

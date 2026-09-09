@@ -40,6 +40,28 @@ function formatDateLabel(dateValue) {
   return date.toLocaleString();
 }
 
+function getCheckboxValue(elementId) {
+  const element = document.getElementById(elementId);
+  return Boolean(element && element.checked);
+}
+
+function getYearFromDate(dateValue) {
+  if (!dateValue) return '';
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return '';
+  return String(date.getFullYear());
+}
+
+function syncYearField(dateInputId, yearInputId) {
+  const dateInput = document.getElementById(dateInputId);
+  const yearInput = document.getElementById(yearInputId);
+  if (!dateInput || !yearInput) return;
+  const year = getYearFromDate(dateInput.value);
+  if (year) {
+    yearInput.value = year;
+  }
+}
+
 function adminAuthRequiredMessage() {
   return 'Admin authentication is currently required for this operation. Login will be enabled in a future version.';
 }
@@ -711,13 +733,19 @@ function escapeHtml(value) {
 function fillMovieForm(movie) {
   document.getElementById('movieId').value = movie._id || '';
   document.getElementById('movieTitle').value = movie.title || '';
+  document.getElementById('movieOriginalTitle').value = movie.originalTitle || '';
   document.getElementById('movieOverview').value = movie.overview || '';
   document.getElementById('movieCategory').value = movie.category || 'Action';
   document.getElementById('movieRegion').value = movie.region || 'Hollywood';
   document.getElementById('movieType').value = movie.type || 'movie';
-  document.getElementById('moviePosterPath').value = movie.posterPath || '';
+  document.getElementById('movieStatus').value = movie.status || 'draft';
+  document.getElementById('moviePosterPath').value = movie.posterPath || movie.poster || '';
+  document.getElementById('movieBannerPath').value = movie.banner || movie.bannerPath || '';
   document.getElementById('movieReleaseDate').value = formatDateForInput(movie.releaseDate);
+  document.getElementById('movieYear').value = getYearFromDate(movie.releaseDate) || '';
   document.getElementById('movieVoteAverage').value = movie.voteAverage ?? 0;
+  document.getElementById('movieFeatured').checked = Boolean(movie.featured);
+  document.getElementById('movieTrending').checked = Boolean(movie.trending);
 
   const sourceContainer = document.getElementById('movieSourceList');
   sourceContainer.innerHTML = '';
@@ -735,6 +763,10 @@ function fillMovieForm(movie) {
 function resetMovieForm() {
   document.getElementById('movieForm').reset();
   document.getElementById('movieId').value = '';
+  document.getElementById('movieStatus').value = 'draft';
+  document.getElementById('movieType').value = 'movie';
+  document.getElementById('movieFeatured').checked = false;
+  document.getElementById('movieTrending').checked = false;
   document.getElementById('movieSourceList').innerHTML = '';
   addSourceToContainer('movieSourceList', { quality: '1080p', language: 'English', format: 'mp4', isActive: true });
   document.getElementById('movieSubmitButton').textContent = 'Create Movie';
@@ -747,9 +779,14 @@ function fillSeriesForm(series) {
   document.getElementById('seriesCategory').value = series.category || 'Action';
   document.getElementById('seriesRegion').value = series.region || 'Hollywood';
   document.getElementById('seriesType').value = series.type || 'series';
-  document.getElementById('seriesPosterPath').value = series.posterPath || '';
+  document.getElementById('seriesStatus').value = series.status || 'draft';
+  document.getElementById('seriesPosterPath').value = series.posterPath || series.poster || '';
+  document.getElementById('seriesBannerPath').value = series.banner || series.bannerPath || '';
   document.getElementById('seriesReleaseDate').value = formatDateForInput(series.releaseDate);
+  document.getElementById('seriesYear').value = getYearFromDate(series.releaseDate) || '';
   document.getElementById('seriesVoteAverage').value = series.voteAverage ?? 0;
+  document.getElementById('seriesFeatured').checked = Boolean(series.featured);
+  document.getElementById('seriesTrending').checked = Boolean(series.trending);
 
   const sourceContainer = document.getElementById('seriesSourceList');
   sourceContainer.innerHTML = '';
@@ -767,6 +804,10 @@ function fillSeriesForm(series) {
 function resetSeriesForm() {
   document.getElementById('seriesForm').reset();
   document.getElementById('seriesId').value = '';
+  document.getElementById('seriesStatus').value = 'draft';
+  document.getElementById('seriesType').value = 'series';
+  document.getElementById('seriesFeatured').checked = false;
+  document.getElementById('seriesTrending').checked = false;
   document.getElementById('seriesSourceList').innerHTML = '';
   addSourceToContainer('seriesSourceList', { quality: '1080p', language: 'English', format: 'mp4', isActive: true });
   document.getElementById('seriesSubmitButton').textContent = 'Create Series';
@@ -777,13 +818,19 @@ async function submitMovieForm(event) {
   const id = document.getElementById('movieId').value;
   const payload = {
     title: trimToUndefined(document.getElementById('movieTitle').value),
+    originalTitle: trimToUndefined(document.getElementById('movieOriginalTitle').value),
     overview: trimToUndefined(document.getElementById('movieOverview').value),
     category: trimToUndefined(document.getElementById('movieCategory').value),
     region: trimToUndefined(document.getElementById('movieRegion').value),
     posterPath: trimToUndefined(document.getElementById('moviePosterPath').value),
+    banner: trimToUndefined(document.getElementById('movieBannerPath').value),
     releaseDate: trimToUndefined(document.getElementById('movieReleaseDate').value),
+    year: trimToUndefined(document.getElementById('movieYear').value) || getYearFromDate(document.getElementById('movieReleaseDate').value),
     voteAverage: Number(document.getElementById('movieVoteAverage').value),
     type: trimToUndefined(document.getElementById('movieType').value) || 'movie',
+    status: trimToUndefined(document.getElementById('movieStatus').value) || 'draft',
+    featured: getCheckboxValue('movieFeatured'),
+    trending: getCheckboxValue('movieTrending'),
     videoSources: getSourceList('movieSourceList'),
   };
 
@@ -828,9 +875,14 @@ async function submitSeriesForm(event) {
     category: trimToUndefined(document.getElementById('seriesCategory').value),
     region: trimToUndefined(document.getElementById('seriesRegion').value),
     posterPath: trimToUndefined(document.getElementById('seriesPosterPath').value),
+    banner: trimToUndefined(document.getElementById('seriesBannerPath').value),
     releaseDate: trimToUndefined(document.getElementById('seriesReleaseDate').value),
+    year: trimToUndefined(document.getElementById('seriesYear').value) || getYearFromDate(document.getElementById('seriesReleaseDate').value),
     voteAverage: Number(document.getElementById('seriesVoteAverage').value),
     type: trimToUndefined(document.getElementById('seriesType').value) || 'series',
+    status: trimToUndefined(document.getElementById('seriesStatus').value) || 'draft',
+    featured: getCheckboxValue('seriesFeatured'),
+    trending: getCheckboxValue('seriesTrending'),
     videoSources: getSourceList('seriesSourceList'),
   };
 
@@ -865,13 +917,17 @@ async function submitEpisodeForm(event) {
   const seriesId = document.getElementById('episodeSeriesSelect').value;
   const payload = {
     seriesId,
+    seasonNumber: Number(document.getElementById('seasonNumberInput').value),
+    episodeNumber: Number(document.getElementById('episodeNumberInput').value),
     title: trimToUndefined(document.getElementById('episodeTitleInput').value),
     overview: trimToUndefined(document.getElementById('episodeOverviewInput').value),
-    episodeNumber: Number(document.getElementById('episodeNumberInput').value),
+    releaseDate: trimToUndefined(document.getElementById('episodeReleaseDateInput').value),
+    duration: Number(document.getElementById('episodeDurationInput').value) || 0,
+    status: 'draft',
     videoSources: getSourceList('episodeSourceList'),
   };
 
-  if (!seriesId || !payload.title || Number.isNaN(payload.episodeNumber) || !payload.videoSources.length) {
+  if (!seriesId || !payload.title || Number.isNaN(payload.episodeNumber) || Number.isNaN(payload.seasonNumber) || !payload.videoSources.length) {
     showToast('Please select a series, enter a title, number, and at least one video source.', 'error');
     return;
   }
@@ -930,6 +986,36 @@ async function uploadPoster(event) {
     showToast('Poster uploaded successfully.', 'success');
     document.getElementById('moviePosterPath').value = objectKey;
     document.getElementById('seriesPosterPath').value = objectKey;
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+async function uploadBanner(event) {
+  event.preventDefault();
+  const fileInput = document.getElementById('bannerUploadFile');
+  const file = fileInput.files[0];
+  if (!file) {
+    showToast('Please choose a banner image first.', 'error');
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('image', file);
+
+  try {
+    const response = await apiRequest('/storage/image', {
+      method: 'POST',
+      body: formData,
+      json: false,
+    });
+    const objectKey = response && response.data ? response.data.objectKey : response && response.objectKey ? response.objectKey : '';
+    if (!objectKey) {
+      throw new Error('The backend did not return a banner reference.');
+    }
+    showToast('Banner uploaded successfully.', 'success');
+    document.getElementById('movieBannerPath').value = objectKey;
+    document.getElementById('seriesBannerPath').value = objectKey;
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -1075,9 +1161,13 @@ function bindEvents() {
   document.getElementById('seriesForm').addEventListener('submit', submitSeriesForm);
   document.getElementById('episodeForm').addEventListener('submit', submitEpisodeForm);
   document.getElementById('posterUploadForm').addEventListener('submit', uploadPoster);
+  document.getElementById('bannerUploadForm').addEventListener('submit', uploadBanner);
   document.getElementById('videoUploadForm').addEventListener('submit', handleVideoUpload);
   document.getElementById('resetMovieFormButton').addEventListener('click', resetMovieForm);
   document.getElementById('resetSeriesFormButton').addEventListener('click', resetSeriesForm);
+  document.getElementById('movieReleaseDate').addEventListener('change', () => syncYearField('movieReleaseDate', 'movieYear'));
+  document.getElementById('seriesReleaseDate').addEventListener('change', () => syncYearField('seriesReleaseDate', 'seriesYear'));
+  document.getElementById('episodeReleaseDateInput').addEventListener('change', () => syncYearField('episodeReleaseDateInput', 'episodeYear'));
 
   document.querySelectorAll('.nav-item').forEach((button) => {
     button.addEventListener('click', () => {

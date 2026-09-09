@@ -131,12 +131,17 @@
 
             <div class="form-grid two-col">
               <div class="field-group">
-                <label for="movieTitle">Title</label>
+                <label for="movieTitle">Movie Title *</label>
                 <input id="movieTitle" required />
               </div>
 
               <div class="field-group">
-                <label for="movieCategory">Category</label>
+                <label for="movieOriginalTitle">Original Title</label>
+                <input id="movieOriginalTitle" />
+              </div>
+
+              <div class="field-group">
+                <label for="movieCategory">Category *</label>
                 <select id="movieCategory" required>
                   <option value="">Select category</option>
                   <option value="Action">Action</option>
@@ -148,11 +153,24 @@
               </div>
 
               <div class="field-group">
-                <label for="movieRegion">Region</label>
+                <label for="movieRegion">Region *</label>
                 <select id="movieRegion" required>
                   <option value="Hollywood">Hollywood</option>
                   <option value="Bollywood">Bollywood</option>
                   <option value="All">All</option>
+                </select>
+              </div>
+
+              <div class="field-group">
+                <label for="movieStatus">Status</label>
+                <select id="movieStatus">
+                  <option value="draft">Draft</option>
+                  <option value="uploading">Uploading</option>
+                  <option value="processing">Processing</option>
+                  <option value="ready">Ready</option>
+                  <option value="published">Published</option>
+                  <option value="unpublished">Unpublished</option>
+                  <option value="failed">Failed</option>
                 </select>
               </div>
 
@@ -164,24 +182,45 @@
                 </select>
               </div>
 
+              <div class="field-group">
+                <label for="movieVoteAverage">Rating / Vote Average</label>
+                <input id="movieVoteAverage" type="number" min="0" max="10" step="0.1" required />
+              </div>
+
+              <div class="field-group">
+                <label for="movieYear">Year</label>
+                <input id="movieYear" type="number" min="1900" max="2100" />
+              </div>
+
               <div class="field-group full-width">
-                <label for="movieOverview">Overview</label>
+                <label for="movieOverview">Overview *</label>
                 <textarea id="movieOverview" rows="3" required></textarea>
               </div>
 
               <div class="field-group">
-                <label for="moviePosterPath">Poster Path</label>
-                <input id="moviePosterPath" type="url" placeholder="https://.../poster.jpg" />
+                <label for="moviePosterPath">Poster Object Key</label>
+                <input id="moviePosterPath" type="text" placeholder="Wasabi object key returned after upload" />
               </div>
 
               <div class="field-group">
-                <label for="movieReleaseDate">Release Date</label>
+                <label for="movieBannerPath">Banner Object Key</label>
+                <input id="movieBannerPath" type="text" placeholder="Wasabi banner object key" />
+              </div>
+
+              <div class="field-group">
+                <label for="movieReleaseDate">Release Date *</label>
                 <input id="movieReleaseDate" type="date" required />
               </div>
 
-              <div class="field-group">
-                <label for="movieVoteAverage">Vote Average</label>
-                <input id="movieVoteAverage" type="number" min="0" max="10" step="0.1" required />
+              <div class="field-group toggle-row">
+                <label class="checkbox-inline">
+                  <input id="movieFeatured" type="checkbox" />
+                  Featured
+                </label>
+                <label class="checkbox-inline">
+                  <input id="movieTrending" type="checkbox" />
+                  Trending
+                </label>
               </div>
             </div>
 
@@ -190,6 +229,7 @@
                 <h3>Video Sources</h3>
                 <button type="button" class="secondary-btn" id="addMovieSourceButton">Add Source</button>
               </div>
+              <p class="helper-copy">Use the existing Wasabi upload flow: choose a local file, request a presigned URL, upload to Wasabi, complete the upload, then store the returned objectKey in MongoDB.</p>
               <div id="movieSourceList" class="source-list"></div>
             </div>
 
@@ -230,12 +270,12 @@
 
             <div class="form-grid two-col">
               <div class="field-group">
-                <label for="seriesTitle">Title</label>
+                <label for="seriesTitle">Series Title *</label>
                 <input id="seriesTitle" required />
               </div>
 
               <div class="field-group">
-                <label for="seriesCategory">Category</label>
+                <label for="seriesCategory">Category *</label>
                 <select id="seriesCategory" required>
                   <option value="">Select category</option>
                   <option value="Action">Action</option>
@@ -247,11 +287,23 @@
               </div>
 
               <div class="field-group">
-                <label for="seriesRegion">Region</label>
+                <label for="seriesRegion">Region *</label>
                 <select id="seriesRegion" required>
                   <option value="Hollywood">Hollywood</option>
                   <option value="Bollywood">Bollywood</option>
                   <option value="All">All</option>
+                </select>
+              </div>
+
+              <div class="field-group">
+                <label for="seriesStatus">Status</label>
+                <select id="seriesStatus">
+                  <option value="draft">Draft</option>
+                  <option value="processing">Processing</option>
+                  <option value="ready">Ready</option>
+                  <option value="published">Published</option>
+                  <option value="unpublished">Unpublished</option>
+                  <option value="archived">Archived</option>
                 </select>
               </div>
 
@@ -262,24 +314,45 @@
                 </select>
               </div>
 
+              <div class="field-group">
+                <label for="seriesVoteAverage">Rating</label>
+                <input id="seriesVoteAverage" type="number" min="0" max="10" step="0.1" required />
+              </div>
+
+              <div class="field-group">
+                <label for="seriesYear">Year</label>
+                <input id="seriesYear" type="number" min="1900" max="2100" />
+              </div>
+
               <div class="field-group full-width">
-                <label for="seriesOverview">Overview</label>
+                <label for="seriesOverview">Overview *</label>
                 <textarea id="seriesOverview" rows="3" required></textarea>
               </div>
 
               <div class="field-group">
-                <label for="seriesPosterPath">Poster Path</label>
-                <input id="seriesPosterPath" type="url" placeholder="https://.../poster.jpg" />
+                <label for="seriesPosterPath">Poster Object Key</label>
+                <input id="seriesPosterPath" type="text" placeholder="Wasabi poster object key" />
               </div>
 
               <div class="field-group">
-                <label for="seriesReleaseDate">Release Date</label>
+                <label for="seriesBannerPath">Banner Object Key</label>
+                <input id="seriesBannerPath" type="text" placeholder="Wasabi banner object key" />
+              </div>
+
+              <div class="field-group">
+                <label for="seriesReleaseDate">Release Date *</label>
                 <input id="seriesReleaseDate" type="date" required />
               </div>
 
-              <div class="field-group">
-                <label for="seriesVoteAverage">Vote Average</label>
-                <input id="seriesVoteAverage" type="number" min="0" max="10" step="0.1" required />
+              <div class="field-group toggle-row">
+                <label class="checkbox-inline">
+                  <input id="seriesFeatured" type="checkbox" />
+                  Featured
+                </label>
+                <label class="checkbox-inline">
+                  <input id="seriesTrending" type="checkbox" />
+                  Trending
+                </label>
               </div>
             </div>
 
@@ -322,25 +395,40 @@
           <form id="episodeForm" class="content-form">
             <div class="form-grid two-col">
               <div class="field-group">
-                <label for="episodeSeriesSelect">Series</label>
+                <label for="episodeSeriesSelect">Series *</label>
                 <select id="episodeSeriesSelect" required>
                   <option value="">Select series</option>
                 </select>
               </div>
 
               <div class="field-group">
-                <label for="episodeNumberInput">Episode Number</label>
+                <label for="seasonNumberInput">Season Number *</label>
+                <input id="seasonNumberInput" type="number" min="1" required />
+              </div>
+
+              <div class="field-group">
+                <label for="episodeNumberInput">Episode Number *</label>
                 <input id="episodeNumberInput" type="number" min="1" required />
               </div>
 
+              <div class="field-group">
+                <label for="episodeReleaseDateInput">Release Date</label>
+                <input id="episodeReleaseDateInput" type="date" />
+              </div>
+
               <div class="field-group full-width">
-                <label for="episodeTitleInput">Episode Title</label>
+                <label for="episodeTitleInput">Episode Title *</label>
                 <input id="episodeTitleInput" required />
               </div>
 
               <div class="field-group full-width">
                 <label for="episodeOverviewInput">Overview</label>
                 <textarea id="episodeOverviewInput" rows="3"></textarea>
+              </div>
+
+              <div class="field-group">
+                <label for="episodeDurationInput">Duration (minutes)</label>
+                <input id="episodeDurationInput" type="number" min="0" step="1" />
               </div>
             </div>
 
@@ -388,6 +476,24 @@
                 </div>
                 <button type="submit" class="primary-btn">Upload Poster</button>
               </form>
+            </div>
+
+            <div class="panel-card">
+              <h3>Banner Upload</h3>
+              <form id="bannerUploadForm" class="content-form compact-form">
+                <div class="field-group">
+                  <label for="bannerUploadFile">Banner image</label>
+                  <input id="bannerUploadFile" type="file" accept="image/*" required />
+                </div>
+                <button type="submit" class="primary-btn">Upload Banner</button>
+              </form>
+            </div>
+
+            <div class="panel-card storage-help-card">
+              <h3>How storage works</h3>
+              <p><strong>WASABI:</strong> Stores actual files like movie videos, posters, banners, episode videos and subtitles.</p>
+              <p><strong>MONGODB:</strong> Stores titles, descriptions, release dates, categories, ratings, Wasabi objectKeys, quality, language, relationships and status.</p>
+              <p><strong>Render API:</strong> Handles business logic and signed playback generation, not large media files.</p>
             </div>
 
             <div class="panel-card">
