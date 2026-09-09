@@ -40,6 +40,10 @@ function formatDateLabel(dateValue) {
   return date.toLocaleString();
 }
 
+function adminAuthRequiredMessage() {
+  return 'Admin authentication is currently required for this operation. Login will be enabled in a future version.';
+}
+
 function parseApiError(payload, status) {
   if (typeof payload === 'string' && payload.trim()) return payload;
   if (payload && payload.message) return payload.message;
@@ -50,8 +54,8 @@ function parseApiError(payload, status) {
 
   const fallbackMap = {
     400: 'Invalid request. Please check your input.',
-    401: 'Your admin session has expired. Please log in again.',
-    403: 'You do not have permission to perform this action.',
+    401: adminAuthRequiredMessage(),
+    403: adminAuthRequiredMessage(),
     404: 'The requested resource was not found.',
     409: 'This item already exists.',
     413: 'The uploaded file is too large.',
@@ -183,12 +187,13 @@ async function apiRequest(path, options = {}) {
 
   if (response.status === 401) {
     clearAuthState();
-    showLogin();
-    throw new Error('Your admin session has expired. Please log in again.');
+    showToast(adminAuthRequiredMessage(), 'error');
+    throw new Error(adminAuthRequiredMessage());
   }
 
   if (response.status === 403) {
-    throw new Error('You do not have permission to perform this action.');
+    showToast(adminAuthRequiredMessage(), 'error');
+    throw new Error(adminAuthRequiredMessage());
   }
 
   if (!response.ok) {
@@ -371,7 +376,7 @@ async function logout() {
       }).catch(() => {});
     }
   } finally {
-    showLogin();
+    showApp();
     showToast('You have been logged out.', 'info');
   }
 }
@@ -652,7 +657,6 @@ async function loadCrashReports() {
 }
 
 async function refreshAllData() {
-  if (!isLoggedIn()) return;
   await Promise.all([
     loadMovies(),
     loadSeries(),
@@ -1127,12 +1131,10 @@ async function initializeApp() {
   if (session && session.accessToken) {
     appState.accessToken = session.accessToken;
     appState.user = session.user || null;
-    showApp();
-    await refreshAllData();
-  } else {
-    showLogin();
   }
 
+  showApp();
+  await refreshAllData();
   bindEvents();
   setActiveSection('dashboardSection');
 }
