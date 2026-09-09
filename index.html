@@ -472,9 +472,11 @@
               <form id="posterUploadForm" class="content-form compact-form">
                 <div class="field-group">
                   <label for="posterUploadFile">Image file</label>
-                  <input id="posterUploadFile" type="file" accept="image/*" required />
+                  <input id="posterUploadFile" type="file" accept="image/jpeg,image/png,image/webp" required />
                 </div>
-                <button type="submit" class="primary-btn">Upload Poster</button>
+                <div id="posterSelectedMeta" class="selected-file-meta">No file selected.</div>
+                <button type="submit" id="posterUploadButton" class="primary-btn">Upload Poster</button>
+                <div id="posterUploadStatus" class="upload-status ready">Ready</div>
               </form>
             </div>
 
@@ -483,9 +485,11 @@
               <form id="bannerUploadForm" class="content-form compact-form">
                 <div class="field-group">
                   <label for="bannerUploadFile">Banner image</label>
-                  <input id="bannerUploadFile" type="file" accept="image/*" required />
+                  <input id="bannerUploadFile" type="file" accept="image/jpeg,image/png,image/webp" required />
                 </div>
-                <button type="submit" class="primary-btn">Upload Banner</button>
+                <div id="bannerSelectedMeta" class="selected-file-meta">No file selected.</div>
+                <button type="submit" id="bannerUploadButton" class="primary-btn">Upload Banner</button>
+                <div id="bannerUploadStatus" class="upload-status ready">Ready</div>
               </form>
             </div>
 
@@ -508,8 +512,20 @@
                 </div>
 
                 <div class="field-group">
-                  <label for="videoTargetSelect">Select item</label>
-                  <select id="videoTargetSelect" required></select>
+                  <label>Select item</label>
+                  <div class="custom-select-wrapper">
+                    <input id="videoTargetSelect" type="hidden" required />
+                    <button type="button" id="videoTargetToggle" class="custom-select-button" aria-haspopup="listbox" aria-expanded="false">
+                      <span id="videoTargetDisplay">Select Movie</span>
+                      <span class="chevron">▼</span>
+                    </button>
+                    <div id="videoTargetMenu" class="custom-select-menu hidden" role="listbox" aria-label="Video target selector">
+                      <div class="custom-select-search-wrap">
+                        <input id="videoTargetSearch" type="search" placeholder="Search movie..." />
+                      </div>
+                      <div id="videoTargetOptions" class="custom-option-list"></div>
+                    </div>
+                  </div>
                 </div>
 
                 <div class="field-group">

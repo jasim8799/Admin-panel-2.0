@@ -104,6 +104,24 @@ function showToast(message, type = 'info') {
   }, 3200);
 }
 
+function logApiError(method, url, status, response) {
+  const safeResponse = typeof response === 'string' ? response :
+    response && typeof response === 'object'
+      ? {
+          success: response.success,
+          message: response.message,
+          code: response.code,
+        }
+      : response;
+
+  console.warn('[API ERROR]', {
+    method,
+    url,
+    status,
+    response: safeResponse,
+  });
+}
+
 function setFormMessage(elementId, message, isError = false) {
   if (!isBrowser) return;
   const element = document.getElementById(elementId);
@@ -167,6 +185,7 @@ async function apiRequest(path, options = {}) {
   const token = session && session.accessToken ? session.accessToken : '';
   const method = (options.method || 'GET').toUpperCase();
   const headers = { ...(options.headers || {}) };
+  const url = buildApiUrl(path);
 
   if (token && !headers.Authorization) {
     headers.Authorization = `Bearer ${token}`;
@@ -179,7 +198,7 @@ async function apiRequest(path, options = {}) {
 
   let response;
   try {
-    response = await fetch(buildApiUrl(path), {
+    response = await fetch(url, {
       ...options,
       method,
       headers,
@@ -190,7 +209,13 @@ async function apiRequest(path, options = {}) {
           : JSON.stringify(options.body),
     });
   } catch (error) {
-    throw new Error('Network error. Please check your internet connection and try again.');
+    console.error('[API ERROR]', {
+      method,
+      url,
+      status: 'fetch_exception',
+      response: 'Fetch failed before a response was received.',
+    });
+    throw new Error('Unable to connect to the API. This may be a CORS, API URL, Render availability, or browser connection problem.');
   }
 
   const contentType = response.headers.get('content-type') || '';
@@ -207,18 +232,50 @@ async function apiRequest(path, options = {}) {
     payload = rawText ? rawText : null;
   }
 
+  if (response.status === 400) {
+    const message = parseApiError(payload, response.status);
+    logApiError(method, url, response.status, payload);
+    throw new Error(message);
+  }
+
   if (response.status === 401) {
     clearAuthState();
-    showToast(adminAuthRequiredMessage(), 'error');
-    throw new Error(adminAuthRequiredMessage());
+    logApiError(method, url, response.status, payload);
+    throw new Error('Admin authentication is required for this operation.');
   }
 
   if (response.status === 403) {
-    showToast(adminAuthRequiredMessage(), 'error');
-    throw new Error(adminAuthRequiredMessage());
+    logApiError(method, url, response.status, payload);
+    throw new Error('You do not have permission to perform this operation.');
+  }
+
+  if (response.status === 404) {
+    logApiError(method, url, response.status, payload);
+    throw new Error(parseApiError(payload, response.status));
+  }
+
+  if (response.status === 413) {
+    logApiError(method, url, response.status, payload);
+    throw new Error('Image is too large. Maximum size is 8 MB.');
+  }
+
+  if (response.status === 429) {
+    logApiError(method, url, response.status, payload);
+    throw new Error(parseApiError(payload, response.status));
+  }
+
+  if (response.status === 500) {
+    logApiError(method, url, response.status, payload);
+    throw new Error(payload && payload.message ? payload.message : 'Server error while uploading the image.');
+  }
+
+  if (response.status === 503) {
+    logApiError(method, url, response.status, payload);
+    throw new Error(parseApiError(payload, response.status));
   }
 
   if (!response.ok) {
+    logApiError(method, url, response.status, payload);
     throw new Error(parseApiError(payload, response.status));
   }
 
@@ -702,23 +759,115 @@ function populateSeriesSelection() {
   }
 }
 
-function populateVideoTargetOptions() {
-  const targetSelect = document.getElementById('videoTargetSelect');
-  if (!targetSelect) return;
-
+function renderCustomVideoTargetOptions() {
+  const optionsContainer = document.getElementById('videoTargetOptions');
+  const menu = document.getElementById('videoTargetMenu');
   const targetType = document.getElementById('videoTargetType')?.value || 'movie';
   const list = targetType === 'series' ? appState.series : appState.movies;
-  const currentValue = targetSelect.value || '';
+  const targetInput = document.getElementById('videoTargetSelect');
+  const display = document.getElementById('videoTargetDisplay');
 
-  const options = ['<option value="">Select item</option>'];
-  list.forEach((item) => {
-    const label = item.title || 'Untitled';
-    options.push(`<option value="${item._id}">${escapeHtml(label)}</option>`);
-  });
-  targetSelect.innerHTML = options.join('');
-  if (list.some((item) => item._id === currentValue)) {
-    targetSelect.value = currentValue;
+  if (!optionsContainer || !targetInput || !display || !menu) return;
+
+  const currentValue = targetInput.value || '';
+  optionsContainer.innerHTML = '';
+
+  if (!list.length) {
+    optionsContainer.innerHTML = '<div class="custom-option empty">No movies found.</div>';
+    display.textContent = targetType === 'series' ? 'Select Series' : 'Select Movie';
+    targetInput.value = '';
+    return;
   }
+
+  list.forEach((item) => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'custom-option';
+    option.dataset.value = item._id;
+    option.textContent = item.title || 'Untitled';
+    if (currentValue === item._id) {
+      option.classList.add('selected');
+      display.textContent = item.title || 'Untitled';
+    }
+    option.addEventListener('click', () => {
+      targetInput.value = item._id;
+      display.textContent = item.title || 'Untitled';
+      menu.classList.add('hidden');
+      optionsContainer.querySelectorAll('.custom-option').forEach((entry) => {
+        entry.classList.toggle('selected', entry.dataset.value === item._id);
+      });
+    });
+    optionsContainer.appendChild(option);
+  });
+}
+
+function populateVideoTargetOptions() {
+  const targetType = document.getElementById('videoTargetType')?.value || 'movie';
+  const targetInput = document.getElementById('videoTargetSelect');
+  const display = document.getElementById('videoTargetDisplay');
+  const searchInput = document.getElementById('videoTargetSearch');
+  const menu = document.getElementById('videoTargetMenu');
+  const currentValue = targetInput ? targetInput.value : '';
+
+  if (!targetInput || !display || !searchInput || !menu) return;
+
+  const list = targetType === 'series' ? appState.series : appState.movies;
+  const label = targetType === 'series' ? 'Select Series' : 'Select Movie';
+  display.textContent = label;
+  targetInput.value = '';
+  searchInput.value = '';
+  menu.classList.add('hidden');
+
+  if (!list.length) {
+    renderCustomVideoTargetOptions();
+    return;
+  }
+
+  if (currentValue && list.some((item) => item._id === currentValue)) {
+    const item = list.find((entry) => entry._id === currentValue);
+    display.textContent = item && (item.title || 'Untitled');
+    targetInput.value = currentValue;
+  }
+
+  renderCustomVideoTargetOptions();
+}
+
+function handleVideoTargetSearch() {
+  const searchInput = document.getElementById('videoTargetSearch');
+  const targetType = document.getElementById('videoTargetType')?.value || 'movie';
+  const list = targetType === 'series' ? appState.series : appState.movies;
+  const targetInput = document.getElementById('videoTargetSelect');
+  const optionsContainer = document.getElementById('videoTargetOptions');
+
+  if (!searchInput || !optionsContainer || !targetInput) return;
+
+  const query = searchInput.value.trim().toLowerCase();
+  const filtered = list.filter((item) => !query || (item.title || '').toLowerCase().includes(query));
+
+  optionsContainer.innerHTML = '';
+
+  if (!filtered.length) {
+    optionsContainer.innerHTML = '<div class="custom-option empty">No movies found.</div>';
+    return;
+  }
+
+  filtered.forEach((item) => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'custom-option';
+    option.dataset.value = item._id;
+    option.textContent = item.title || 'Untitled';
+    if (targetInput.value === item._id) {
+      option.classList.add('selected');
+    }
+    option.addEventListener('click', () => {
+      targetInput.value = item._id;
+      document.getElementById('videoTargetDisplay').textContent = item.title || 'Untitled';
+      document.getElementById('videoTargetMenu').classList.add('hidden');
+      handleVideoTargetSearch();
+    });
+    optionsContainer.appendChild(option);
+  });
 }
 
 function escapeHtml(value) {
@@ -961,17 +1110,70 @@ async function confirmDelete(type, id, title) {
   }
 }
 
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / (1024 ** index);
+  return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+function validateImageFile(file) {
+  if (!file) {
+    return { valid: false, message: 'Please choose an image first.' };
+  }
+
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  const fileType = file.type || '';
+  const extension = (file.name || '').split('.').pop()?.toLowerCase();
+  const validType = allowedTypes.includes(fileType) || ['jpg', 'jpeg', 'png', 'webp'].includes(extension);
+
+  if (!validType) {
+    return { valid: false, message: 'Unsupported image type. Use JPG, JPEG, PNG, or WEBP.' };
+  }
+
+  if (file.size > 8 * 1024 * 1024) {
+    return { valid: false, message: 'Image is too large. Maximum size is 8 MB.' };
+  }
+
+  return { valid: true, message: '' };
+}
+
+function updateSelectedFileMeta(inputId, metaId, labelText) {
+  const input = document.getElementById(inputId);
+  const meta = document.getElementById(metaId);
+  if (!input || !meta) return;
+
+  const file = input.files && input.files[0];
+  if (!file) {
+    meta.textContent = labelText;
+    return;
+  }
+
+  meta.innerHTML = `<strong>${escapeHtml(file.name || 'Selected file')}</strong><span>${formatFileSize(file.size)}</span>`;
+}
+
 async function uploadPoster(event) {
   event.preventDefault();
   const fileInput = document.getElementById('posterUploadFile');
   const file = fileInput.files[0];
-  if (!file) {
-    showToast('Please choose an image first.', 'error');
+  const validation = validateImageFile(file);
+  const status = document.getElementById('posterUploadStatus');
+  const uploadButton = document.getElementById('posterUploadButton');
+
+  if (!validation.valid) {
+    status.textContent = validation.message;
+    status.className = 'upload-status error';
+    showToast(validation.message, 'error');
     return;
   }
 
   const formData = new FormData();
   formData.append('image', file);
+
+  uploadButton.disabled = true;
+  status.textContent = 'Uploading...';
+  status.className = 'upload-status upload-pending';
 
   try {
     const response = await apiRequest('/storage/image', {
@@ -983,11 +1185,17 @@ async function uploadPoster(event) {
     if (!objectKey) {
       throw new Error('The backend did not return an image reference.');
     }
+    status.textContent = 'Uploaded successfully';
+    status.className = 'upload-status success';
     showToast('Poster uploaded successfully.', 'success');
     document.getElementById('moviePosterPath').value = objectKey;
     document.getElementById('seriesPosterPath').value = objectKey;
   } catch (error) {
-    showToast(error.message, 'error');
+    status.textContent = error && error.message ? error.message : 'Failed';
+    status.className = 'upload-status error';
+    showToast(error.message || 'Poster upload failed.', 'error');
+  } finally {
+    uploadButton.disabled = false;
   }
 }
 
@@ -1168,6 +1376,34 @@ function bindEvents() {
   document.getElementById('movieReleaseDate').addEventListener('change', () => syncYearField('movieReleaseDate', 'movieYear'));
   document.getElementById('seriesReleaseDate').addEventListener('change', () => syncYearField('seriesReleaseDate', 'seriesYear'));
   document.getElementById('episodeReleaseDateInput').addEventListener('change', () => syncYearField('episodeReleaseDateInput', 'episodeYear'));
+
+  document.getElementById('posterUploadFile').addEventListener('change', () => updateSelectedFileMeta('posterUploadFile', 'posterSelectedMeta', 'No file selected.'));
+  document.getElementById('bannerUploadFile').addEventListener('change', () => updateSelectedFileMeta('bannerUploadFile', 'bannerSelectedMeta', 'No file selected.'));
+
+  const targetToggle = document.getElementById('videoTargetToggle');
+  const targetMenu = document.getElementById('videoTargetMenu');
+  const targetSearch = document.getElementById('videoTargetSearch');
+  const targetType = document.getElementById('videoTargetType');
+  if (targetToggle && targetMenu && targetSearch && targetType) {
+    targetToggle.addEventListener('click', () => {
+      targetMenu.classList.toggle('hidden');
+      if (!targetMenu.classList.contains('hidden')) {
+        targetSearch.focus();
+      }
+    });
+    targetSearch.addEventListener('input', handleVideoTargetSearch);
+    targetType.addEventListener('change', () => {
+      document.getElementById('videoTargetSelect').value = '';
+      document.getElementById('videoTargetDisplay').textContent = targetType.value === 'series' ? 'Select Series' : 'Select Movie';
+      targetSearch.value = '';
+      populateVideoTargetOptions();
+    });
+    document.addEventListener('click', (event) => {
+      if (!targetMenu.contains(event.target) && !targetToggle.contains(event.target)) {
+        targetMenu.classList.add('hidden');
+      }
+    });
+  }
 
   document.querySelectorAll('.nav-item').forEach((button) => {
     button.addEventListener('click', () => {
