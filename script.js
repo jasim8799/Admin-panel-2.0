@@ -148,6 +148,64 @@ function logApiError(method, url, status, response) {
   });
 }
 
+function logBrowserApiFailure(method, url, error) {
+  const origin = window.location && window.location.origin ? window.location.origin : 'unknown';
+  console.error('[Moviepro API ERROR]', {
+    method,
+    url,
+    origin,
+    error,
+  });
+}
+
+function logUploadDebug(step, url, method, status, error) {
+  const origin = window.location && window.location.origin ? window.location.origin : 'unknown';
+  console.debug('[Moviepro Upload Debug]', {
+    step,
+    url,
+    method,
+    origin,
+    status,
+    error,
+  });
+}
+
+function classifyBrowserError(error) {
+  const details = `${(error && error.name) || ''} ${(error && error.message) || String(error || '')}`.toLowerCase();
+  if (!details || details.includes('invalid url') || details.includes('url is invalid')) {
+    return {
+      type: 'invalid-url',
+      message: 'The Moviepro API URL is invalid. Check the API_BASE value and the browser URL.',
+    };
+  }
+
+  if (details.includes('abort') || details.includes('timeout')) {
+    return {
+      type: 'timeout',
+      message: 'Moviepro API request timed out. The server may be busy or unavailable.',
+    };
+  }
+
+  if (details.includes('cors') || details.includes('cross-origin') || details.includes('blocked by cors') || details.includes('not allowed by access-control-allow-origin')) {
+    return {
+      type: 'cors',
+      message: 'Browser request was blocked by CORS. Update the Render ALLOWED_ORIGINS to include the exact browser origin: ' + (window.location && window.location.origin ? window.location.origin : 'this page origin'),
+    };
+  }
+
+  if (details.includes('failed to fetch') || details.includes('network') || details.includes('load failed') || details.includes('offline') || details.includes('fetch failed')) {
+    return {
+      type: 'network',
+      message: 'Browser could not reach the Moviepro API. Open DevTools → Console/Network for the exact CORS or network error.',
+    };
+  }
+
+  return {
+    type: 'network',
+    message: 'Browser could not reach the Moviepro API. Open DevTools → Console/Network for the exact CORS or network error.',
+  };
+}
+
 function setFormMessage(elementId, message, isError = false) {
   if (!isBrowser) return;
   const element = document.getElementById(elementId);
@@ -168,11 +226,16 @@ async function apiRequest(path, options = {}) {
   const method = (options.method || 'GET').toUpperCase();
   const headers = { ...(options.headers || {}) };
   const url = buildApiUrl(path);
+  const timeoutMs = options.timeoutMs ?? 25000;
+  const shouldUseTimeout = options.skipTimeout !== true && typeof AbortController !== 'undefined';
 
-  const needsJson = options.json !== false && !(options.body instanceof FormData);
-  if (needsJson && !headers['Content-Type'] && typeof options.body !== 'undefined' && options.body !== null && !(options.body instanceof FormData)) {
+  const needsJson = options.json !== false && !(options.body instanceof FormData) && !(options.body instanceof Blob) && !(options.body instanceof File);
+  if (needsJson && !headers['Content-Type'] && typeof options.body !== 'undefined' && options.body !== null && !(options.body instanceof FormData) && !(options.body instanceof Blob) && !(options.body instanceof File)) {
     headers['Content-Type'] = 'application/json';
   }
+
+  const controller = shouldUseTimeout ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
 
   let response;
   try {
@@ -180,20 +243,21 @@ async function apiRequest(path, options = {}) {
       ...options,
       method,
       headers,
+      signal: controller ? controller.signal : options.signal,
       body: (typeof options.body === 'undefined' || options.body === null)
         ? undefined
-        : (typeof options.body === 'string' || options.body instanceof FormData || options.body instanceof Blob)
+        : (typeof options.body === 'string' || options.body instanceof FormData || options.body instanceof Blob || options.body instanceof File)
           ? options.body
           : JSON.stringify(options.body),
     });
   } catch (error) {
-    console.error('[API ERROR]', {
-      method,
-      url,
-      status: 'fetch_exception',
-      response: 'Fetch failed before a response was received.',
-    });
-    throw new Error('Unable to connect to the Moviepro API. Check the API URL, CORS configuration, or server availability.');
+    if (timer) clearTimeout(timer);
+    const parsedError = error instanceof Error ? error : new Error(String(error));
+    const classifier = classifyBrowserError(parsedError);
+    logBrowserApiFailure(method, url, parsedError);
+    throw new Error(classifier.message);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 
   const contentType = response.headers.get('content-type') || '';
@@ -1246,6 +1310,8 @@ async function uploadVideoToWasabi(file, uploadUrl, onProgress) {
     xhr.open('PUT', uploadUrl, true);
     xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
 
+    logUploadDebug('Wasabi upload start', uploadUrl, 'PUT', 'pending', null);
+
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) return;
       const percent = Math.round((event.loaded / event.total) * 100);
@@ -1254,13 +1320,27 @@ async function uploadVideoToWasabi(file, uploadUrl, onProgress) {
 
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
+        logUploadDebug('Wasabi upload success', uploadUrl, 'PUT', xhr.status, null);
         resolve();
       } else {
-        reject(new Error(`Upload failed with status ${xhr.status}.`));
+        const message = `Wasabi upload failed with status ${xhr.status}.`;
+        logUploadDebug('Wasabi upload failed', uploadUrl, 'PUT', xhr.status, message);
+        reject(new Error(message));
       }
     };
 
-    xhr.onerror = () => reject(new Error('Upload failed due to a network error.'));
+    xhr.onerror = () => {
+      const message = 'Wasabi browser upload is blocked by bucket CORS configuration.';
+      logUploadDebug('Wasabi upload blocked by CORS', uploadUrl, 'PUT', xhr.status || 0, message);
+      reject(new Error(message));
+    };
+
+    xhr.onabort = () => {
+      const message = 'Wasabi upload was cancelled.';
+      logUploadDebug('Wasabi upload aborted', uploadUrl, 'PUT', xhr.status || 0, message);
+      reject(new Error(message));
+    };
+
     xhr.send(file);
   });
 }
@@ -1302,58 +1382,65 @@ async function handleVideoUpload(event) {
 
   try {
     const prefix = targetType === 'movie' ? 'movies' : targetType === 'series' ? 'series' : 'episodes';
-    const uploadInfo = await requestPresignedUpload(file, quality, language, prefix);
-    progressLabel.textContent = 'Uploading to Wasabi...';
-    await uploadVideoToWasabi(file, uploadInfo.uploadUrl, (percent) => {
-      progressBar.style.width = `${percent}%`;
-      progressPct.textContent = `${percent}%`;
-    });
 
-    progressLabel.textContent = 'Completing upload...';
-    const completion = await completeWasabiUpload(uploadInfo.objectKey);
-    const objectKey = completion && completion.objectKey ? completion.objectKey : uploadInfo.objectKey;
+    try {
+      logUploadDebug('Request presigned URL', buildApiUrl('/storage/presign-upload'), 'POST', 'pending', null);
+      const uploadInfo = await requestPresignedUpload(file, quality, language, prefix);
+      logUploadDebug('Received presigned URL', uploadInfo && uploadInfo.uploadUrl ? uploadInfo.uploadUrl : 'missing', 'POST', 'success', null);
+      progressLabel.textContent = 'Uploading to Wasabi...';
+      await uploadVideoToWasabi(file, uploadInfo.uploadUrl, (percent) => {
+        progressBar.style.width = `${percent}%`;
+        progressPct.textContent = `${percent}%`;
+      });
 
-    const source = {
-      quality,
-      language,
-      objectKey,
-      format: (file.type || 'video/mp4').split('/')[1] || 'mp4',
-      isActive: true,
-    };
+      progressLabel.textContent = 'Completing upload...';
+      const completion = await completeWasabiUpload(uploadInfo.objectKey);
+      const objectKey = completion && completion.objectKey ? completion.objectKey : uploadInfo.objectKey;
 
-    let currentItem = null;
-    if (targetType === 'movie') {
-      currentItem = appState.movies.find((entry) => entry._id === targetId);
-      const nextSources = dedupeSources([...(Array.isArray(currentItem && currentItem.videoSources) ? currentItem.videoSources : []), source]);
-      await apiRequest(`/movies/${targetId}`, {
-        method: 'PUT',
-        body: { videoSources: nextSources },
-      });
-    } else if (targetType === 'series') {
-      currentItem = appState.series.find((entry) => entry._id === targetId);
-      const nextSources = dedupeSources([...(Array.isArray(currentItem && currentItem.videoSources) ? currentItem.videoSources : []), source]);
-      await apiRequest(`/series/${targetId}`, {
-        method: 'PUT',
-        body: { videoSources: nextSources },
-      });
-    } else {
-      currentItem = appState.episodes.find((entry) => entry._id === targetId);
-      const nextSources = dedupeSources([...(Array.isArray(currentItem && currentItem.videoSources) ? currentItem.videoSources : []), source]);
-      await apiRequest(`/episodes/${targetId}`, {
-        method: 'PUT',
-        body: { videoSources: nextSources },
-      });
+      const source = {
+        quality,
+        language,
+        objectKey,
+        format: (file.type || 'video/mp4').split('/')[1] || 'mp4',
+        isActive: true,
+      };
+
+      let currentItem = null;
+      if (targetType === 'movie') {
+        currentItem = appState.movies.find((entry) => entry._id === targetId);
+        const nextSources = dedupeSources([...(Array.isArray(currentItem && currentItem.videoSources) ? currentItem.videoSources : []), source]);
+        await apiRequest(`/movies/${targetId}`, {
+          method: 'PUT',
+          body: { videoSources: nextSources },
+        });
+      } else if (targetType === 'series') {
+        currentItem = appState.series.find((entry) => entry._id === targetId);
+        const nextSources = dedupeSources([...(Array.isArray(currentItem && currentItem.videoSources) ? currentItem.videoSources : []), source]);
+        await apiRequest(`/series/${targetId}`, {
+          method: 'PUT',
+          body: { videoSources: nextSources },
+        });
+      } else {
+        currentItem = appState.episodes.find((entry) => entry._id === targetId);
+        const nextSources = dedupeSources([...(Array.isArray(currentItem && currentItem.videoSources) ? currentItem.videoSources : []), source]);
+        await apiRequest(`/episodes/${targetId}`, {
+          method: 'PUT',
+          body: { videoSources: nextSources },
+        });
+      }
+
+      showToast('Video uploaded and attached successfully.', 'success');
+      document.getElementById('videoUploadFile').value = '';
+      progressBar.style.width = '100%';
+      progressPct.textContent = '100%';
+      progressLabel.textContent = 'Upload complete';
+      await refreshAllData();
+    } catch (error) {
+      const message = error && error.message ? error.message : 'Upload failed.';
+      logUploadDebug('Video upload failed', 'video upload workflow', 'POST/PUT', 'error', message);
+      showToast(message, 'error');
+      progressLabel.textContent = message;
     }
-
-    showToast('Video uploaded and attached successfully.', 'success');
-    document.getElementById('videoUploadFile').value = '';
-    progressBar.style.width = '100%';
-    progressPct.textContent = '100%';
-    progressLabel.textContent = 'Upload complete';
-    await refreshAllData();
-  } catch (error) {
-    showToast(error.message, 'error');
-    progressLabel.textContent = 'Upload failed';
   } finally {
     button.disabled = false;
   }
