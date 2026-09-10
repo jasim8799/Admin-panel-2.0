@@ -393,6 +393,7 @@
           </div>
 
           <form id="episodeForm" class="content-form">
+            <input type="hidden" id="episodeId" />
             <div class="form-grid two-col">
               <div class="field-group">
                 <label for="episodeSeriesSelect">Series *</label>
@@ -454,6 +455,7 @@
                   <th>Title</th>
                   <th>Overview</th>
                   <th>Sources</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="episodeTableBody"></tbody>
@@ -508,6 +510,7 @@
                   <select id="videoTargetType">
                     <option value="movie">Movie</option>
                     <option value="series">Series</option>
+                    <option value="episode">Episode</option>
                   </select>
                 </div>
 

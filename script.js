@@ -63,10 +63,39 @@ function syncYearField(dateInputId, yearInputId) {
 }
 
 function adminAuthRequiredMessage() {
-  return 'Admin authentication is currently required for this operation. Login will be enabled in a future version.';
+  return 'Admin authentication is required for this operation.';
 }
 
-function parseApiError(payload, status) {
+function getApiData(payload, fallbackKey) {
+  if (!payload) return null;
+
+  if (payload && payload.success === false && payload.message) {
+    return null;
+  }
+
+  if (payload && Object.prototype.hasOwnProperty.call(payload, 'data')) {
+    const value = payload.data;
+    if (fallbackKey && value && typeof value === 'object' && Array.isArray(value[fallbackKey])) {
+      return value[fallbackKey];
+    }
+    return value;
+  }
+
+  if (fallbackKey && payload && typeof payload === 'object' && Array.isArray(payload[fallbackKey])) {
+    return payload[fallbackKey];
+  }
+
+  return payload;
+}
+
+function getApiList(payload, fallbackKey) {
+  const data = getApiData(payload, fallbackKey);
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === 'object' && Array.isArray(data.items)) return data.items;
+  return [];
+}
+
+function handleApiError(payload, status, fallbackMessage) {
   if (typeof payload === 'string' && payload.trim()) return payload;
   if (payload && payload.message) return payload.message;
   if (payload && payload.error) return payload.error;
@@ -77,7 +106,7 @@ function parseApiError(payload, status) {
   const fallbackMap = {
     400: 'Invalid request. Please check your input.',
     401: adminAuthRequiredMessage(),
-    403: adminAuthRequiredMessage(),
+    403: 'You do not have permission to perform this operation.',
     404: 'The requested resource was not found.',
     409: 'This item already exists.',
     413: 'The uploaded file is too large.',
@@ -86,7 +115,11 @@ function parseApiError(payload, status) {
     503: 'The service is temporarily unavailable. Please try again.',
   };
 
-  return fallbackMap[status] || 'Request failed. Please try again.';
+  return fallbackMap[status] || fallbackMessage || 'Request failed. Please try again.';
+}
+
+function parseApiError(payload, status) {
+  return handleApiError(payload, status, 'Request failed. Please try again.');
 }
 
 function showToast(message, type = 'info') {
@@ -168,9 +201,10 @@ function clearAuthState() {
 function saveAuthState(authPayload) {
   const accessToken = authPayload && authPayload.accessToken ? authPayload.accessToken : '';
   const user = authPayload && authPayload.user ? authPayload.user : null;
+  const role = authPayload && authPayload.role ? authPayload.role : (user && user.role) ? user.role : 'admin';
   appState.accessToken = accessToken;
   appState.user = user;
-  writeSession({ accessToken, user });
+  writeSession({ accessToken, user, role });
 }
 
 function buildApiUrl(path) {
@@ -182,7 +216,7 @@ function buildApiUrl(path) {
 
 async function apiRequest(path, options = {}) {
   const session = readSession();
-  const token = session && session.accessToken ? session.accessToken : '';
+  const token = session && session.accessToken ? session.accessToken : getAccessToken();
   const method = (options.method || 'GET').toUpperCase();
   const headers = { ...(options.headers || {}) };
   const url = buildApiUrl(path);
@@ -215,7 +249,7 @@ async function apiRequest(path, options = {}) {
       status: 'fetch_exception',
       response: 'Fetch failed before a response was received.',
     });
-    throw new Error('Unable to connect to the API. This may be a CORS, API URL, Render availability, or browser connection problem.');
+    throw new Error('Unable to connect to the Moviepro API. Check the API URL, CORS configuration, or server availability.');
   }
 
   const contentType = response.headers.get('content-type') || '';
@@ -240,8 +274,11 @@ async function apiRequest(path, options = {}) {
 
   if (response.status === 401) {
     clearAuthState();
+    if (document.getElementById('authScreen')) {
+      showLogin();
+    }
     logApiError(method, url, response.status, payload);
-    throw new Error('Admin authentication is required for this operation.');
+    throw new Error(adminAuthRequiredMessage());
   }
 
   if (response.status === 403) {
@@ -256,7 +293,7 @@ async function apiRequest(path, options = {}) {
 
   if (response.status === 413) {
     logApiError(method, url, response.status, payload);
-    throw new Error('Image is too large. Maximum size is 8 MB.');
+    throw new Error('The uploaded file is too large. Please choose a smaller file.');
   }
 
   if (response.status === 429) {
@@ -266,7 +303,7 @@ async function apiRequest(path, options = {}) {
 
   if (response.status === 500) {
     logApiError(method, url, response.status, payload);
-    throw new Error(payload && payload.message ? payload.message : 'Server error while uploading the image.');
+    throw new Error(handleApiError(payload, response.status, 'Server error. Please try again.'));
   }
 
   if (response.status === 503) {
@@ -296,21 +333,26 @@ function normalizeListPayload(payload, key) {
 
 function showLogin() {
   if (!isBrowser) return;
-  document.getElementById('authScreen').classList.remove('hidden');
-  document.getElementById('appShell').classList.add('hidden');
+  const authScreen = document.getElementById('authScreen');
+  const appShell = document.getElementById('appShell');
+  if (authScreen) authScreen.classList.remove('hidden');
+  if (appShell) appShell.classList.add('hidden');
 }
 
 function showApp() {
   if (!isBrowser) return;
-  document.getElementById('authScreen').classList.add('hidden');
-  document.getElementById('appShell').classList.remove('hidden');
+  const authScreen = document.getElementById('authScreen');
+  const appShell = document.getElementById('appShell');
+  if (authScreen) authScreen.classList.add('hidden');
+  if (appShell) appShell.classList.remove('hidden');
   const label = document.getElementById('currentUserLabel');
   if (label) {
     label.textContent = appState.user && appState.user.email ? appState.user.email : 'Administrator';
   }
   const role = document.getElementById('settingsRole');
   if (role) {
-    role.textContent = appState.user && appState.user.role ? appState.user.role : 'admin';
+    const session = readSession();
+    role.textContent = (appState.user && appState.user.role) || (session && session.role) || 'admin';
   }
 }
 
@@ -327,6 +369,25 @@ function setActiveSection(sectionId) {
   });
 }
 
+function normalizeObjectKey(value) {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed)) return '';
+  return trimmed;
+}
+
+function dedupeSources(sources) {
+  const seen = new Set();
+  return sources.filter((source) => {
+    const objectKey = normalizeObjectKey(source && source.objectKey);
+    if (!objectKey) return false;
+    if (seen.has(objectKey)) return false;
+    seen.add(objectKey);
+    return true;
+  });
+}
+
 function buildSourceRow(source = {}, allowRemove = true) {
   const row = document.createElement('div');
   row.className = 'source-row';
@@ -340,8 +401,10 @@ function buildSourceRow(source = {}, allowRemove = true) {
   language.value = source.language || '';
 
   const objectKey = document.createElement('input');
-  objectKey.placeholder = 'Object Key';
-  objectKey.value = source.objectKey || source.url || '';
+  objectKey.placeholder = 'Wasabi objectKey';
+  objectKey.value = normalizeObjectKey(source.objectKey || source.url || '');
+  objectKey.readOnly = Boolean(normalizeObjectKey(source.objectKey || source.url || ''));
+  objectKey.title = 'Object key is generated by Wasabi upload and stored as an object key.';
 
   const format = document.createElement('input');
   format.placeholder = 'Format';
@@ -373,28 +436,24 @@ function collectSourceRows(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return [];
 
-  return Array.from(container.querySelectorAll('.source-row')).map((row) => {
+  const rows = Array.from(container.querySelectorAll('.source-row')).map((row) => {
     const inputs = row.querySelectorAll('input, select');
-    const quality = inputs[0]?.value || '';
-    const language = inputs[1]?.value || '';
-    const objectKey = inputs[2]?.value || '';
-    const format = inputs[3]?.value || 'mp4';
+    const quality = (inputs[0]?.value || '').trim();
+    const language = (inputs[1]?.value || '').trim();
+    const objectKey = normalizeObjectKey(inputs[2]?.value || '');
+    const format = (inputs[3]?.value || 'mp4').trim() || 'mp4';
     const isActive = inputs[4]?.value === 'true';
 
-    const source = {
-      quality: quality.trim(),
-      language: language.trim(),
-      format: format.trim() || 'mp4',
-      objectKey: objectKey.trim(),
+    return {
+      quality,
+      language,
+      format,
+      objectKey,
       isActive,
     };
+  });
 
-    if (source.objectKey && !source.objectKey.startsWith('movies/') && !source.objectKey.startsWith('series/') && !source.objectKey.startsWith('episodes/')) {
-      source.url = source.objectKey;
-    }
-
-    return source;
-  }).filter((source) => source.quality && source.language && (source.objectKey || source.url));
+  return dedupeSources(rows.filter((source) => source.quality && source.language && source.objectKey));
 }
 
 function getSourceList(containerId) {
@@ -455,7 +514,7 @@ async function logout() {
       }).catch(() => {});
     }
   } finally {
-    showApp();
+    showLogin();
     showToast('You have been logged out.', 'info');
   }
 }
@@ -585,7 +644,7 @@ function renderEpisodesTable(items) {
   if (!items.length) {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
-    cell.colSpan = 4;
+    cell.colSpan = 5;
     cell.textContent = 'No episodes found for this series.';
     row.appendChild(cell);
     body.appendChild(row);
@@ -607,7 +666,26 @@ function renderEpisodesTable(items) {
     const count = Array.isArray(episode.videoSources) ? episode.videoSources.length : 0;
     sourcesCell.textContent = String(count);
 
-    row.append(episodeCell, titleCell, overviewCell, sourcesCell);
+    const actionsCell = document.createElement('td');
+    const actions = document.createElement('div');
+    actions.className = 'cell-actions';
+
+    const editButton = document.createElement('button');
+    editButton.type = 'button';
+    editButton.className = 'action-btn';
+    editButton.textContent = 'Edit';
+    editButton.addEventListener('click', () => fillEpisodeForm(episode));
+
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'action-btn delete';
+    deleteButton.textContent = 'Delete';
+    deleteButton.addEventListener('click', () => confirmDelete('episode', episode._id, episode.title));
+
+    actions.append(editButton, deleteButton);
+    actionsCell.appendChild(actions);
+
+    row.append(episodeCell, titleCell, overviewCell, sourcesCell, actionsCell);
     body.appendChild(row);
   });
 }
@@ -763,7 +841,7 @@ function renderCustomVideoTargetOptions() {
   const optionsContainer = document.getElementById('videoTargetOptions');
   const menu = document.getElementById('videoTargetMenu');
   const targetType = document.getElementById('videoTargetType')?.value || 'movie';
-  const list = targetType === 'series' ? appState.series : appState.movies;
+  const list = targetType === 'series' ? appState.series : targetType === 'episode' ? appState.episodes : appState.movies;
   const targetInput = document.getElementById('videoTargetSelect');
   const display = document.getElementById('videoTargetDisplay');
 
@@ -773,8 +851,9 @@ function renderCustomVideoTargetOptions() {
   optionsContainer.innerHTML = '';
 
   if (!list.length) {
-    optionsContainer.innerHTML = '<div class="custom-option empty">No movies found.</div>';
-    display.textContent = targetType === 'series' ? 'Select Series' : 'Select Movie';
+    const emptyText = targetType === 'episode' ? 'No episodes found.' : targetType === 'series' ? 'No series found.' : 'No movies found.';
+    optionsContainer.innerHTML = `<div class="custom-option empty">${emptyText}</div>`;
+    display.textContent = targetType === 'episode' ? 'Select Episode' : targetType === 'series' ? 'Select Series' : 'Select Movie';
     targetInput.value = '';
     return;
   }
@@ -811,8 +890,8 @@ function populateVideoTargetOptions() {
 
   if (!targetInput || !display || !searchInput || !menu) return;
 
-  const list = targetType === 'series' ? appState.series : appState.movies;
-  const label = targetType === 'series' ? 'Select Series' : 'Select Movie';
+  const list = targetType === 'series' ? appState.series : targetType === 'episode' ? appState.episodes : appState.movies;
+  const label = targetType === 'episode' ? 'Select Episode' : targetType === 'series' ? 'Select Series' : 'Select Movie';
   display.textContent = label;
   targetInput.value = '';
   searchInput.value = '';
@@ -835,7 +914,7 @@ function populateVideoTargetOptions() {
 function handleVideoTargetSearch() {
   const searchInput = document.getElementById('videoTargetSearch');
   const targetType = document.getElementById('videoTargetType')?.value || 'movie';
-  const list = targetType === 'series' ? appState.series : appState.movies;
+  const list = targetType === 'series' ? appState.series : targetType === 'episode' ? appState.episodes : appState.movies;
   const targetInput = document.getElementById('videoTargetSelect');
   const optionsContainer = document.getElementById('videoTargetOptions');
 
@@ -847,7 +926,8 @@ function handleVideoTargetSearch() {
   optionsContainer.innerHTML = '';
 
   if (!filtered.length) {
-    optionsContainer.innerHTML = '<div class="custom-option empty">No movies found.</div>';
+    const emptyText = targetType === 'episode' ? 'No episodes found.' : targetType === 'series' ? 'No series found.' : 'No movies found.';
+    optionsContainer.innerHTML = `<div class="custom-option empty">${emptyText}</div>`;
     return;
   }
 
@@ -888,8 +968,8 @@ function fillMovieForm(movie) {
   document.getElementById('movieRegion').value = movie.region || 'Hollywood';
   document.getElementById('movieType').value = movie.type || 'movie';
   document.getElementById('movieStatus').value = movie.status || 'draft';
-  document.getElementById('moviePosterPath').value = movie.posterPath || movie.poster || '';
-  document.getElementById('movieBannerPath').value = movie.banner || movie.bannerPath || '';
+  document.getElementById('moviePosterPath').value = normalizeObjectKey(movie.posterPath || movie.poster || '');
+  document.getElementById('movieBannerPath').value = normalizeObjectKey(movie.bannerPath || movie.banner || '');
   document.getElementById('movieReleaseDate').value = formatDateForInput(movie.releaseDate);
   document.getElementById('movieYear').value = getYearFromDate(movie.releaseDate) || '';
   document.getElementById('movieVoteAverage').value = movie.voteAverage ?? 0;
@@ -898,7 +978,7 @@ function fillMovieForm(movie) {
 
   const sourceContainer = document.getElementById('movieSourceList');
   sourceContainer.innerHTML = '';
-  const sources = Array.isArray(movie.videoSources) ? movie.videoSources : (Array.isArray(movie.videoLinks) ? movie.videoLinks : []);
+  const sources = Array.isArray(movie.videoSources) ? movie.videoSources : [];
   if (!sources.length) {
     addSourceToContainer('movieSourceList');
     return;
@@ -929,8 +1009,8 @@ function fillSeriesForm(series) {
   document.getElementById('seriesRegion').value = series.region || 'Hollywood';
   document.getElementById('seriesType').value = series.type || 'series';
   document.getElementById('seriesStatus').value = series.status || 'draft';
-  document.getElementById('seriesPosterPath').value = series.posterPath || series.poster || '';
-  document.getElementById('seriesBannerPath').value = series.banner || series.bannerPath || '';
+  document.getElementById('seriesPosterPath').value = normalizeObjectKey(series.posterPath || series.poster || '');
+  document.getElementById('seriesBannerPath').value = normalizeObjectKey(series.bannerPath || series.banner || '');
   document.getElementById('seriesReleaseDate').value = formatDateForInput(series.releaseDate);
   document.getElementById('seriesYear').value = getYearFromDate(series.releaseDate) || '';
   document.getElementById('seriesVoteAverage').value = series.voteAverage ?? 0;
@@ -948,6 +1028,40 @@ function fillSeriesForm(series) {
 
   document.getElementById('seriesSubmitButton').textContent = 'Save Series';
   setActiveSection('seriesSection');
+}
+
+function fillEpisodeForm(episode) {
+  document.getElementById('episodeId').value = episode._id || '';
+  document.getElementById('episodeSeriesSelect').value = episode.seriesId || document.getElementById('episodeSeriesSelect').value || '';
+  document.getElementById('seasonNumberInput').value = episode.seasonNumber ?? 1;
+  document.getElementById('episodeNumberInput').value = episode.episodeNumber ?? 1;
+  document.getElementById('episodeReleaseDateInput').value = formatDateForInput(episode.releaseDate);
+  document.getElementById('episodeTitleInput').value = episode.title || '';
+  document.getElementById('episodeOverviewInput').value = episode.overview || '';
+  document.getElementById('episodeDurationInput').value = episode.duration ?? 0;
+
+  const sourceContainer = document.getElementById('episodeSourceList');
+  sourceContainer.innerHTML = '';
+  const sources = Array.isArray(episode.videoSources) ? episode.videoSources : [];
+  if (!sources.length) {
+    addSourceToContainer('episodeSourceList');
+    return;
+  }
+  sources.forEach((source) => addSourceToContainer('episodeSourceList', source));
+
+  const button = document.querySelector('#episodeForm button[type="submit"]');
+  if (button) button.textContent = 'Save Episode';
+  setActiveSection('episodesSection');
+}
+
+function resetEpisodeForm() {
+  const form = document.getElementById('episodeForm');
+  if (form) form.reset();
+  document.getElementById('episodeId').value = '';
+  document.getElementById('episodeSourceList').innerHTML = '';
+  addSourceToContainer('episodeSourceList', { quality: '1080p', language: 'English', format: 'mp4', isActive: true });
+  const button = document.querySelector('#episodeForm button[type="submit"]');
+  if (button) button.textContent = 'Create Episode';
 }
 
 function resetSeriesForm() {
@@ -1063,6 +1177,7 @@ async function submitSeriesForm(event) {
 
 async function submitEpisodeForm(event) {
   event.preventDefault();
+  const id = document.getElementById('episodeId').value;
   const seriesId = document.getElementById('episodeSeriesSelect').value;
   const payload = {
     seriesId,
@@ -1077,20 +1192,18 @@ async function submitEpisodeForm(event) {
   };
 
   if (!seriesId || !payload.title || Number.isNaN(payload.episodeNumber) || Number.isNaN(payload.seasonNumber) || !payload.videoSources.length) {
-    showToast('Please select a series, enter a title, number, and at least one video source.', 'error');
+    showToast('Please select a series, enter a title, number, and at least one valid video source.', 'error');
     return;
   }
 
   try {
-    await apiRequest('/episodes', {
-      method: 'POST',
-      body: payload,
-    });
-    showToast('Episode created successfully.', 'success');
-    document.getElementById('episodeForm').reset();
-    document.getElementById('episodeSourceList').innerHTML = '';
-    addSourceToContainer('episodeSourceList', { quality: '1080p', language: 'English', format: 'mp4', isActive: true });
-    await loadEpisodesForSelectedSeries();
+    const route = id ? `/episodes/${id}` : '/episodes';
+    const method = id ? 'PUT' : 'POST';
+    await apiRequest(route, { method, body: payload });
+    showToast(id ? 'Episode updated successfully.' : 'Episode created successfully.', 'success');
+    resetEpisodeForm();
+    if (seriesId) await loadEpisodesForSelectedSeries();
+    await refreshAllData();
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -1181,9 +1294,9 @@ async function uploadPoster(event) {
       body: formData,
       json: false,
     });
-    const objectKey = response && response.data ? response.data.objectKey : response && response.objectKey ? response.objectKey : '';
+    const objectKey = getApiData(response) && getApiData(response).objectKey ? getApiData(response).objectKey : (response && response.objectKey ? response.objectKey : '');
     if (!objectKey) {
-      throw new Error('The backend did not return an image reference.');
+      throw new Error('The backend did not return a valid image objectKey.');
     }
     status.textContent = 'Uploaded successfully';
     status.className = 'upload-status success';
@@ -1203,13 +1316,23 @@ async function uploadBanner(event) {
   event.preventDefault();
   const fileInput = document.getElementById('bannerUploadFile');
   const file = fileInput.files[0];
-  if (!file) {
-    showToast('Please choose a banner image first.', 'error');
+  const validation = validateImageFile(file);
+  const status = document.getElementById('bannerUploadStatus');
+  const uploadButton = document.getElementById('bannerUploadButton');
+
+  if (!validation.valid) {
+    status.textContent = validation.message;
+    status.className = 'upload-status error';
+    showToast(validation.message, 'error');
     return;
   }
 
   const formData = new FormData();
   formData.append('image', file);
+
+  uploadButton.disabled = true;
+  status.textContent = 'Uploading...';
+  status.className = 'upload-status upload-pending';
 
   try {
     const response = await apiRequest('/storage/image', {
@@ -1217,15 +1340,21 @@ async function uploadBanner(event) {
       body: formData,
       json: false,
     });
-    const objectKey = response && response.data ? response.data.objectKey : response && response.objectKey ? response.objectKey : '';
+    const objectKey = getApiData(response) && getApiData(response).objectKey ? getApiData(response).objectKey : (response && response.objectKey ? response.objectKey : '');
     if (!objectKey) {
-      throw new Error('The backend did not return a banner reference.');
+      throw new Error('The backend did not return a valid banner objectKey.');
     }
+    status.textContent = 'Uploaded successfully';
+    status.className = 'upload-status success';
     showToast('Banner uploaded successfully.', 'success');
     document.getElementById('movieBannerPath').value = objectKey;
     document.getElementById('seriesBannerPath').value = objectKey;
   } catch (error) {
-    showToast(error.message, 'error');
+    status.textContent = error && error.message ? error.message : 'Failed';
+    status.className = 'upload-status error';
+    showToast(error.message || 'Banner upload failed.', 'error');
+  } finally {
+    uploadButton.disabled = false;
   }
 }
 
@@ -1310,7 +1439,8 @@ async function handleVideoUpload(event) {
   progressPct.textContent = '0%';
 
   try {
-    const uploadInfo = await requestPresignedUpload(file, quality, language, targetType === 'series' ? 'series' : 'movies');
+    const prefix = targetType === 'movie' ? 'movies' : targetType === 'series' ? 'series' : 'episodes';
+    const uploadInfo = await requestPresignedUpload(file, quality, language, prefix);
     progressLabel.textContent = 'Uploading to Wasabi...';
     await uploadVideoToWasabi(file, uploadInfo.uploadUrl, (percent) => {
       progressBar.style.width = `${percent}%`;
@@ -1329,17 +1459,25 @@ async function handleVideoUpload(event) {
       isActive: true,
     };
 
+    let currentItem = null;
     if (targetType === 'movie') {
-      const movie = appState.movies.find((entry) => entry._id === targetId);
-      const nextSources = Array.isArray(movie && movie.videoSources) ? [...movie.videoSources, source] : [source];
+      currentItem = appState.movies.find((entry) => entry._id === targetId);
+      const nextSources = dedupeSources([...(Array.isArray(currentItem && currentItem.videoSources) ? currentItem.videoSources : []), source]);
       await apiRequest(`/movies/${targetId}`, {
         method: 'PUT',
         body: { videoSources: nextSources },
       });
-    } else {
-      const series = appState.series.find((entry) => entry._id === targetId);
-      const nextSources = Array.isArray(series && series.videoSources) ? [...series.videoSources, source] : [source];
+    } else if (targetType === 'series') {
+      currentItem = appState.series.find((entry) => entry._id === targetId);
+      const nextSources = dedupeSources([...(Array.isArray(currentItem && currentItem.videoSources) ? currentItem.videoSources : []), source]);
       await apiRequest(`/series/${targetId}`, {
+        method: 'PUT',
+        body: { videoSources: nextSources },
+      });
+    } else {
+      currentItem = appState.episodes.find((entry) => entry._id === targetId);
+      const nextSources = dedupeSources([...(Array.isArray(currentItem && currentItem.videoSources) ? currentItem.videoSources : []), source]);
+      await apiRequest(`/episodes/${targetId}`, {
         method: 'PUT',
         body: { videoSources: nextSources },
       });
@@ -1371,6 +1509,14 @@ function bindEvents() {
   document.getElementById('posterUploadForm').addEventListener('submit', uploadPoster);
   document.getElementById('bannerUploadForm').addEventListener('submit', uploadBanner);
   document.getElementById('videoUploadForm').addEventListener('submit', handleVideoUpload);
+  document.getElementById('videoTargetType').addEventListener('change', () => {
+    const select = document.getElementById('videoTargetSelect');
+    const display = document.getElementById('videoTargetDisplay');
+    const type = document.getElementById('videoTargetType').value;
+    select.value = '';
+    display.textContent = type === 'episode' ? 'Select Episode' : type === 'series' ? 'Select Series' : 'Select Movie';
+    populateVideoTargetOptions();
+  });
   document.getElementById('resetMovieFormButton').addEventListener('click', resetMovieForm);
   document.getElementById('resetSeriesFormButton').addEventListener('click', resetSeriesForm);
   document.getElementById('movieReleaseDate').addEventListener('change', () => syncYearField('movieReleaseDate', 'movieYear'));
@@ -1418,6 +1564,10 @@ function bindEvents() {
   document.getElementById('seriesSearch').addEventListener('input', () => filterSeriesTable());
   document.getElementById('episodeSeriesSelect').addEventListener('change', loadEpisodesForSelectedSeries);
   document.getElementById('videoTargetType').addEventListener('change', populateVideoTargetOptions);
+  const resetEpisodeButton = document.getElementById('resetEpisodeFormButton');
+  if (resetEpisodeButton) {
+    resetEpisodeButton.addEventListener('click', resetEpisodeForm);
+  }
 
   document.getElementById('addMovieSourceButton').addEventListener('click', () => addSourceToContainer('movieSourceList'));
   document.getElementById('addSeriesSourceButton').addEventListener('click', () => addSourceToContainer('seriesSourceList'));
@@ -1457,10 +1607,13 @@ async function initializeApp() {
   if (session && session.accessToken) {
     appState.accessToken = session.accessToken;
     appState.user = session.user || null;
+    showApp();
+    await refreshAllData();
+  } else {
+    clearAuthState();
+    showLogin();
   }
 
-  showApp();
-  await refreshAllData();
   bindEvents();
   setActiveSection('dashboardSection');
 }
