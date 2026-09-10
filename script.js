@@ -1,9 +1,6 @@
 const API_BASE = 'https://moviepro2-0-normal-server.onrender.com/api';
-const SESSION_KEY = 'moviepro_admin_session';
 
 const appState = {
-  accessToken: '',
-  user: null,
   movies: [],
   series: [],
   episodes: [],
@@ -62,10 +59,6 @@ function syncYearField(dateInputId, yearInputId) {
   }
 }
 
-function adminAuthRequiredMessage() {
-  return 'Admin authentication is required for this operation.';
-}
-
 function getApiData(payload, fallbackKey) {
   if (!payload) return null;
 
@@ -105,7 +98,7 @@ function handleApiError(payload, status, fallbackMessage) {
 
   const fallbackMap = {
     400: 'Invalid request. Please check your input.',
-    401: adminAuthRequiredMessage(),
+    401: 'Unauthorized API request.',
     403: 'You do not have permission to perform this operation.',
     404: 'The requested resource was not found.',
     409: 'This item already exists.',
@@ -164,49 +157,6 @@ function setFormMessage(elementId, message, isError = false) {
   element.classList.toggle('success', !isError && Boolean(message));
 }
 
-function readSession() {
-  if (!isBrowser) return null;
-  try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch (error) {
-    return null;
-  }
-}
-
-function writeSession(session) {
-  if (!isBrowser) return;
-  if (!session) {
-    sessionStorage.removeItem(SESSION_KEY);
-    return;
-  }
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-}
-
-function getAccessToken() {
-  const session = readSession();
-  return session && session.accessToken ? session.accessToken : '';
-}
-
-function isLoggedIn() {
-  return Boolean(getAccessToken());
-}
-
-function clearAuthState() {
-  appState.accessToken = '';
-  appState.user = null;
-  writeSession(null);
-}
-
-function saveAuthState(authPayload) {
-  const accessToken = authPayload && authPayload.accessToken ? authPayload.accessToken : '';
-  const user = authPayload && authPayload.user ? authPayload.user : null;
-  const role = authPayload && authPayload.role ? authPayload.role : (user && user.role) ? user.role : 'admin';
-  appState.accessToken = accessToken;
-  appState.user = user;
-  writeSession({ accessToken, user, role });
-}
-
 function buildApiUrl(path) {
   if (!path) return API_BASE;
   if (/^https?:\/\//i.test(path)) return path;
@@ -215,15 +165,9 @@ function buildApiUrl(path) {
 }
 
 async function apiRequest(path, options = {}) {
-  const session = readSession();
-  const token = session && session.accessToken ? session.accessToken : getAccessToken();
   const method = (options.method || 'GET').toUpperCase();
   const headers = { ...(options.headers || {}) };
   const url = buildApiUrl(path);
-
-  if (token && !headers.Authorization) {
-    headers.Authorization = `Bearer ${token}`;
-  }
 
   const needsJson = options.json !== false && !(options.body instanceof FormData);
   if (needsJson && !headers['Content-Type'] && typeof options.body !== 'undefined' && options.body !== null && !(options.body instanceof FormData)) {
@@ -273,12 +217,8 @@ async function apiRequest(path, options = {}) {
   }
 
   if (response.status === 401) {
-    clearAuthState();
-    if (document.getElementById('authScreen')) {
-      showLogin();
-    }
     logApiError(method, url, response.status, payload);
-    throw new Error(adminAuthRequiredMessage());
+    throw new Error(parseApiError(payload, response.status));
   }
 
   if (response.status === 403) {
@@ -329,31 +269,6 @@ function normalizeListPayload(payload, key) {
   if (payload && Array.isArray(payload[key])) return payload[key];
   if (payload && payload.data && Array.isArray(payload.data)) return payload.data;
   return [];
-}
-
-function showLogin() {
-  if (!isBrowser) return;
-  const authScreen = document.getElementById('authScreen');
-  const appShell = document.getElementById('appShell');
-  if (authScreen) authScreen.classList.remove('hidden');
-  if (appShell) appShell.classList.add('hidden');
-}
-
-function showApp() {
-  if (!isBrowser) return;
-  const authScreen = document.getElementById('authScreen');
-  const appShell = document.getElementById('appShell');
-  if (authScreen) authScreen.classList.add('hidden');
-  if (appShell) appShell.classList.remove('hidden');
-  const label = document.getElementById('currentUserLabel');
-  if (label) {
-    label.textContent = appState.user && appState.user.email ? appState.user.email : 'Administrator';
-  }
-  const role = document.getElementById('settingsRole');
-  if (role) {
-    const session = readSession();
-    role.textContent = (appState.user && appState.user.role) || (session && session.role) || 'admin';
-  }
 }
 
 function setActiveSection(sectionId) {
@@ -464,59 +379,6 @@ function addSourceToContainer(containerId, source = {}) {
   const container = document.getElementById(containerId);
   if (!container) return;
   container.appendChild(buildSourceRow(source, true));
-}
-
-async function login(event) {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const email = document.getElementById('email').value.trim();
-  const password = document.getElementById('password').value;
-
-  setFormMessage('loginMessage', 'Signing in...', false);
-  const loginButton = document.getElementById('loginButton');
-  loginButton.disabled = true;
-
-  try {
-    const payload = await apiRequest('/auth/login', {
-      method: 'POST',
-      json: true,
-      body: { email, password },
-    });
-
-    const authPayload = payload && payload.success ? payload : payload && payload.data ? payload.data : payload;
-    if (!authPayload || !authPayload.accessToken) {
-      throw new Error('Login response was missing a token.');
-    }
-
-    saveAuthState(authPayload);
-    setFormMessage('loginMessage', 'Login successful.', false);
-    form.reset();
-    showApp();
-    await refreshAllData();
-  } catch (error) {
-    const message = error && error.message ? error.message : 'Login failed.';
-    setFormMessage('loginMessage', message, true);
-    showToast(message, 'error');
-  } finally {
-    const loginButton = document.getElementById('loginButton');
-    if (loginButton) loginButton.disabled = false;
-  }
-}
-
-async function logout() {
-  const token = getAccessToken();
-  clearAuthState();
-  try {
-    if (token) {
-      await apiRequest('/auth/logout', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => {});
-    }
-  } finally {
-    showLogin();
-    showToast('You have been logged out.', 'info');
-  }
 }
 
 function renderMovieTable(items) {
@@ -1498,8 +1360,6 @@ async function handleVideoUpload(event) {
 }
 
 function bindEvents() {
-  document.getElementById('loginForm').addEventListener('submit', login);
-  document.getElementById('logoutButton').addEventListener('click', logout);
   document.getElementById('refreshAllButton').addEventListener('click', refreshAllData);
   document.getElementById('refreshAnalyticsButton').addEventListener('click', loadAnalytics);
   document.getElementById('refreshCrashButton').addEventListener('click', loadCrashReports);
@@ -1603,19 +1463,9 @@ function filterSeriesTable() {
 async function initializeApp() {
   if (!isBrowser) return;
 
-  const session = readSession();
-  if (session && session.accessToken) {
-    appState.accessToken = session.accessToken;
-    appState.user = session.user || null;
-    showApp();
-    await refreshAllData();
-  } else {
-    clearAuthState();
-    showLogin();
-  }
-
-  bindEvents();
   setActiveSection('dashboardSection');
+  bindEvents();
+  await refreshAllData();
 }
 
 if (isBrowser) {
